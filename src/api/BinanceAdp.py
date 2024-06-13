@@ -2,7 +2,7 @@
 import tensorflow as tf
 import pandas as pd
 from src.aitrini.base.Trinity import create_model  # Importar la función create_model
-from ...api.BinanceAdp import BinanceAdp  # Importar la clase BinanceAdp
+from ..api.BinanceAdp import BinanceAdp  # Importar la clase BinanceAdp
 import time
 import ccxt
 import os

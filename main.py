@@ -6,7 +6,7 @@ import sys
 import os
 import threading
 import dotenv
-from src.aitrini.base.Trinity import create_model  # Importar la función create_model
+from src.aitrini.base.Trinity import create_model
 from src.aitrini.treaning.TreanModel import TreanModel  # Importar la clase TreanModel
 
 dotenv.load_dotenv()  # Cargar variables de entorno desde .env

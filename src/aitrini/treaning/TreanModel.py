@@ -1,7 +1,7 @@
 # src/aitrini/treaning/TreanModel.py
 import tensorflow as tf
 import pandas as pd
-from src.aitrini.base.Trinity import Trinity  # Importar la función create_model
+from ...aitrini.base.Trinity import create_model  # Importar la función create_model
 from ...api.BinanceAdp import BinanceAdp  # Importar la clase BinanceAdp
 import time
 import ccxt
@@ -34,7 +34,7 @@ class TreanModel:
         self.binance_adapter = BinanceAdp(api_key, secret_key)
 
         # Crear el modelo Trinity
-        self.model = Trinity.create_model(input_shape)
+        self.model = create_model(input_shape)
         self.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                           loss='binary_crossentropy',
                           metrics=['accuracy'])
