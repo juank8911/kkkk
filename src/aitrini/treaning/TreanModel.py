@@ -5,23 +5,26 @@ from src.aitrini.base.Trinity import create_model  # Importar la función create
 from ...api.BinanceAdp import BinanceAdp  # Importar la clase BinanceAdp
 import time
 import ccxt
+import os
+import dotenv
+import threading
+
+dotenv.load_dotenv()
 
 class TreanModel:
-    def __init__(self, api_key, secret_key, tfrecords_path, input_shape, target_shape, learning_rate=0.001):
+    def __init__(self, api_key, secret_key, input_shape, target_shape, learning_rate=0.001):
         """
         Inicializa el modelo de entrenamiento.
 
         Args:
             api_key (str): La clave API de Binance.
             secret_key (str): La clave secreta de Binance.
-            tfrecords_path (str): La ruta al archivo TFRecords.
             input_shape (tuple): La forma de los datos de entrada.
             target_shape (tuple): La forma de los datos de salida.
             learning_rate (float): La tasa de aprendizaje del optimizador.
         """
         self.api_key = api_key  #llamar apiKey dese .env
         self.secret_key = secret_key
-        self.tfrecords_path = tfrecords_path
         self.input_shape = input_shape
         self.target_shape = target_shape
         self.learning_rate = learning_rate
@@ -35,41 +38,13 @@ class TreanModel:
                           loss='binary_crossentropy',
                           metrics=['accuracy'])
 
-        # Cargar los datos de entrenamiento desde TFRecords
-        self.train_dataset = self.load_tfrecords(tfrecords_path)
+        # Variables para seguimiento de ganancias
+        self.total_profit = 0
+        self.total_trades = 0
+        self.accuracy = 0
 
-    def load_tfrecords(self, tfrecords_path):
-        """
-        Carga los datos de entrenamiento desde un archivo TFRecords.
-
-        Args:
-            tfrecords_path (str): La ruta al archivo TFRecords.
-
-        Returns:
-            tf.data.Dataset: Un conjunto de datos de TensorFlow.
-        """
-        return tf.data.TFRecordDataset(tfrecords_path).map(self.parse_tfrecord)
-
-    def parse_tfrecord(self, example_proto):
-        """
-        Analiza un ejemplo de TFRecords.
-
-        Args:
-            example_proto (tf.train.Example): Un ejemplo de TFRecords.
-
-        Returns:
-            tuple: Un par de tensores que representan los datos de entrada y salida.
-        """
-        features = {
-            "timestamp": tf.io.FixedLenFeature([], tf.int64),
-            "open": tf.io.FixedLenFeature([], tf.float32),
-            "high": tf.io.FixedLenFeature([], tf.float32),
-            "low": tf.io.FixedLenFeature([], tf.float32),
-            "close": tf.io.FixedLenFeature([], tf.float32),
-            "volume": tf.io.FixedLenFeature([], tf.int64),
-        }
-        parsed_features = tf.io.parse_single_example(example_proto, features)
-        return parsed_features["timestamp"], parsed_features["close"]
+        # Variable para controlar el entrenamiento
+        self.training_stopped = False
 
     def train(self, epochs=10, batch_size=32):
         """
@@ -79,7 +54,20 @@ class TreanModel:
             epochs (int): El número de épocas de entrenamiento.
             batch_size (int): El tamaño del lote de entrenamiento.
         """
-        self.model.fit(self.train_dataset, epochs=epochs, batch_size=batch_size)
+        # Obtener datos históricos de BinanceAdp
+        tfrecords_path = self.binance_adapter.get_historical_futures_data("BTCUSDT", "30s", 10800)  # 3 horas en segundos (10800) y velas de 30 segundos ("30s")
+
+        # Cargar los datos de entrenamiento desde TFRecords
+        self.train_dataset = tf.data.TFRecordDataset(tfrecords_path).map(self.parse_tfrecord)
+
+        # Reshape the data to match the model's expected input shape
+        self.train_dataset = self.train_dataset.map(lambda x, y: (tf.reshape(x, (1, -1)), y))
+
+        history = self.model.fit(self.train_dataset, epochs=epochs, batch_size=batch_size)
+        self.accuracy = history.history['accuracy'][-1]
+        if self.accuracy >= 0.8:
+            self.training_stopped = True
+            print("Entrenamiento detenido. Se alcanzó una precisión del 80% o más.")
 
     def predict(self, data):
         """
@@ -113,61 +101,49 @@ class TreanModel:
         # Realizar una predicción con el modelo
         prediction = self.predict(df["close"].values.reshape(1, -1))
 
-        # Tomar una decisión de compra o venta
+        # Simular la compra o venta
+        self.simulate_trade(symbol, prediction, leverage)
+
+    def simulate_trade(self, symbol, prediction, leverage):
+        """
+        Simula una operación de compra o venta.
+
+        Args:
+            symbol (str): El símbolo del contrato de futuros.
+            prediction (float): La predicción del modelo.
+            leverage (int): El apalancamiento a utilizar.
+        """
+        self.total_trades += 1
+        # Obtener el precio actual
+        current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+
+        # Simular la compra
         if prediction > 0.5:
-            # Comprar
-            self.buy(symbol, leverage)
+            # Calcular el precio objetivo
+            target_price = current_price * (1 + 0.0015)  # Ganancia mínima del 0.15%
+
+            # Simular la espera hasta alcanzar el precio objetivo
+            while self.binance_adapter.exchange.fetch_ticker(symbol)["last"] < target_price:
+                time.sleep(1)
+
+            # Calcular la ganancia
+            profit = (target_price - current_price) * leverage
+            self.total_profit += profit
+            print(f"Compra simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+
+        # Simular la venta
         else:
-            # Vender
-            self.sell(symbol, leverage)
+            # Calcular el precio objetivo
+            target_price = current_price * (1 - 0.0015)  # Ganancia mínima del 0.15%
 
-    def buy(self, symbol, leverage):
-        """
-        Realiza una operación de compra.
+            # Simular la espera hasta alcanzar el precio objetivo
+            while self.binance_adapter.exchange.fetch_ticker(symbol)["last"] > target_price:
+                time.sleep(1)
 
-        Args:
-            symbol (str): El símbolo del contrato de futuros.
-            leverage (int): El apalancamiento a utilizar.
-        """
-        # Obtener el precio actual
-        current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
-
-        # Calcular el precio objetivo
-        target_price = current_price * (1 + 0.0015)  # Ganancia mínima del 0.15%
-
-        # Colocar una orden de compra
-        self.binance_adapter.exchange.create_market_buy_order(symbol, current_price, leverage)
-
-        # Esperar a que el precio alcance el precio objetivo
-        while self.binance_adapter.exchange.fetch_ticker(symbol)["last"] < target_price:
-            time.sleep(1)
-
-        # Cerrar la posición
-        self.close_position(symbol)
-
-    def sell(self, symbol, leverage):
-        """
-        Realiza una operación de venta.
-
-        Args:
-            symbol (str): El símbolo del contrato de futuros.
-            leverage (int): El apalancamiento a utilizar.
-        """
-        # Obtener el precio actual
-        current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
-
-        # Calcular el precio objetivo
-        target_price = current_price * (1 - 0.0015)  # Ganancia mínima del 0.15%
-
-        # Colocar una orden de venta
-        self.binance_adapter.exchange.create_market_sell_order(symbol, current_price, leverage)
-
-        # Esperar a que el precio alcance el precio objetivo
-        while self.binance_adapter.exchange.fetch_ticker(symbol)["last"] > target_price:
-            time.sleep(1)
-
-        # Cerrar la posición
-        self.close_position(symbol)
+            # Calcular la ganancia
+            profit = (current_price - target_price) * leverage
+            self.total_profit += profit
+            print(f"Venta simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
 
     def close_position(self, symbol):
         """
@@ -200,17 +176,30 @@ class TreanModel:
         """
         Ejecuta el modelo de entrenamiento y comercio.
         """
-        # Entrenar el modelo
-        self.train()
+        # Iniciar el entrenamiento en un hilo separado
+        training_thread = threading.Thread(target=self.train)
+        training_thread.start()
 
-        # Obtener la lista de símbolos de futuros perpetuos
-        futures_list = self.binance_adapter.get_perpetual_futures_list()
+        # Realizar operaciones de comercio mientras se entrena el modelo
+        while not self.training_stopped:
+            # Obtener la lista de símbolos de futuros perpetuos
+            futures_list = self.binance_adapter.get_perpetual_futures_list()
 
-        # Iterar sobre los símbolos y realizar operaciones de comercio
-        for symbol in futures_list:
-            # Obtener el apalancamiento óptimo
-            leverage = self.get_optimal_leverage(symbol)
+            # Iterar sobre los símbolos y realizar operaciones de comercio
+            for symbol in futures_list:
+                # Obtener el apalancamiento óptimo
+                leverage = self.get_optimal_leverage(symbol)
 
-            # Realizar una operación de comercio
-            self.trade(symbol, "1m", 60, leverage)
+                # Realizar una operación de comercio
+                self.trade(symbol, "30s", 10800, leverage) # 3 horas en segundos (10800) y velas de 30 segundos ("30s")
+
+            # Esperar un poco antes de la siguiente iteración
+            time.sleep(1)
+
+        # Calcular y mostrar el porcentaje de ganancia total
+        if self.total_trades > 0:
+            total_profit_percentage = (self.total_profit / self.total_trades) * 100
+            print(f"Porcentaje de ganancia total: {total_profit_percentage:.2f}%")
+        else:
+            print("No se realizaron operaciones de comercio.")
 

@@ -15,16 +15,22 @@ class BinanceAdp:
     """
 
     def __init__(self, api_key, secret_key):
-        """
-        Inicializa la conexión con la API de Binance.
+            """
+            Inicializa el adaptador con las claves de la API de Binance.
 
-        Args:
-            api_key (str): La clave API de Binance.
-            secret_key (str): La clave secreta de Binance.
-        """
-        self.binance_service = BinanceServ(api_key, secret_key)  # Crea una instancia de BinanceServ
+            Args:
+                api_key (str): Clave de la API de Binance.
+                secret_key (str): Clave secreta de la API de Binance.
+            """
+            self.api_key = api_key
+            self.secret_key = secret_key
+            self.binance = ccxt.binance({
+                'apiKey': api_key,
+                'ecret': secret_key,
+                'enableRateLimit': True,  # 是否启用Rate Limit
+            })
 
-    def get_historical_futures_data(self, symbol, timeframe, minutes_ago):
+    def get_historical_futures_data(self,timeframe, minutes_ago):
         """
         Obtiene datos históricos de OHLCV para un contrato de futuros perpetuo en Binance y los convierte a TFRecords.
 
@@ -39,7 +45,7 @@ class BinanceAdp:
         """
 
         # Obtener datos históricos de BinanceServ
-        historical_data_json = self.binance_service.get_historical_futures_data(symbol, timeframe, minutes_ago)
+        historical_data_json = self.binance_service.get_historical_futures_data(symbol, 3, 30*10000)
 
         if historical_data_json is None:
             return None
