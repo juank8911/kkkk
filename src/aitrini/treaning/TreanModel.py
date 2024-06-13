@@ -8,6 +8,7 @@ import ccxt
 import os
 import dotenv
 import threading
+import numpy as np
 
 dotenv.load_dotenv()
 
@@ -104,46 +105,77 @@ class TreanModel:
         # Simular la compra o venta
         self.simulate_trade(symbol, prediction, leverage)
 
-    def simulate_trade(self, symbol, prediction, leverage):
-        """
-        Simula una operación de compra o venta.
+    import time
 
-        Args:
-            symbol (str): El símbolo del contrato de futuros.
-            prediction (float): La predicción del modelo.
-            leverage (int): El apalancamiento a utilizar.
-        """
-        self.total_trades += 1
-        # Obtener el precio actual
-        current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+def simulate_trade(self, symbol, prediction, leverage):
+    """
+    Simulates a buy or sell trade with dynamic profit targets and time limits.
 
-        # Simular la compra
-        if prediction > 0.5:
-            # Calcular el precio objetivo
-            target_price = current_price * (1 + 0.0015)  # Ganancia mínima del 0.15%
+    Args:
+        symbol (str): The futures contract symbol.
+        prediction (float): The model's prediction.
+        leverage (int): The leverage to use.
+    """
 
-            # Simular la espera hasta alcanzar el precio objetivo
-            while self.binance_adapter.exchange.fetch_ticker(symbol)["last"] < target_price:
-                time.sleep(1)
+    self.total_trades += 1
+    current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
 
-            # Calcular la ganancia
-            profit = (target_price - current_price) * leverage
-            self.total_profit += profit
-            print(f"Compra simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+    if prediction > 0.5:  # Buy trade
+        # Minimum profit target and time limits
+        min_profit_per_30_seconds = 0.0015 * leverage
+        max_trade_duration_seconds = 300  # 5 minutes
 
-        # Simular la venta
-        else:
-            # Calcular el precio objetivo
-            target_price = current_price * (1 - 0.0015)  # Ganancia mínima del 0.15%
+        # Calculate initial profit target
+        target_price = current_price * (1 + min_profit_per_30_seconds)
 
-            # Simular la espera hasta alcanzar el precio objetivo
-            while self.binance_adapter.exchange.fetch_ticker(symbol)["last"] > target_price:
-                time.sleep(1)
+        # Simulate trade with dynamic profit target and time limit
+        profit = 0
+        start_time = time.time()
+        while profit < min_profit_per_30_seconds and (time.time() - start_time) < max_trade_duration_seconds:
+            # Check current price and update profit
+            new_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+            profit = (new_price - current_price) * leverage
 
-            # Calcular la ganancia
-            profit = (current_price - target_price) * leverage
-            self.total_profit += profit
-            print(f"Venta simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+            # Adjust profit target if necessary
+            elapsed_time_seconds = time.time() - start_time
+            if elapsed_time_seconds % 30 == 0:
+                min_profit_per_30_seconds += 0.0015 * leverage
+                target_price = current_price * (1 + min_profit_per_30_seconds)
+
+            # Sleep for 1 second
+            time.sleep(1)
+
+        # Print trade summary
+        print(f"Compra simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+
+    else:  # Sell trade
+        # Minimum profit target and time limits
+        min_profit_per_30_seconds = 0.0015 * leverage
+        max_trade_duration_seconds = 300  # 5 minutes
+
+        # Calculate initial profit target
+        target_price = current_price * (1 - min_profit_per_30_seconds)
+
+        # Simulate trade with dynamic profit target and time limit
+        profit = 0
+        start_time = time.time()
+        while profit < min_profit_per_30_seconds and (time.time() - start_time) < max_trade_duration_seconds:
+            # Check current price and update profit
+            new_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+            profit = (current_price - new_price) * leverage
+
+            # Adjust profit target if necessary
+            elapsed_time_seconds = time.time() - start_time
+            if elapsed_time_seconds % 30 == 0:
+                min_profit_per_30_seconds += 0.0015 * leverage
+                target_price = current_price * (1 - min_profit_per_30_seconds)
+
+            # Sleep for 1 second
+            time.sleep(1)
+
+        # Print trade summary
+        print(f"Venta simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+
 
     def close_position(self, symbol):
         """
@@ -160,17 +192,50 @@ class TreanModel:
 
     def get_optimal_leverage(self, symbol):
         """
-        Calcula el apalancamiento óptimo para un símbolo.
+        Calcula el apalancamiento óptimo para un símbolo dado en base al modelo entrenado.
 
         Args:
             symbol (str): El símbolo del contrato de futuros.
 
         Returns:
-            int: El apalancamiento óptimo.
+            float: El apalancamiento óptimo predicho (puede no ser un número entero).
+
+        Raises:
+            ValueError: Si el modelo aún no ha sido entrenado.
         """
-        # Implementar la lógica para calcular el apalancamiento óptimo
+
+        if not self.model:
+            raise ValueError("El modelo no ha sido entrenado. Llame a 'train' antes de usar 'get_optimal_leverage'.")
+
+        # Prepare los datos de precios históricos para el símbolo especificado (reemplace con su lógica de carga de datos)
+        features = self.load_symbol_data(symbol)  # Detalles de implementación aquí
+
+        # Asegúrese de que las características estén en el formato esperado
+        features = np.expand_dims(features, axis=0)  # Agregue la dimensión de lote si es necesario
+
+        # Prediga el apalancamiento óptimo utilizando el modelo entrenado
+        predicted_leverage = self.model.predict(features)[0][0]
+
+        # Valide o ajuste la predicción (opcional)
+        # Este paso podría implicar un filtrado basado en el conocimiento del dominio o la tolerancia al riesgo.
+
+        return predicted_leverage
+
+    def load_symbol_data(self, symbol):
+        """
+        Carga los datos de precios históricos para un símbolo dado.
+
+        Args:
+            symbol (str): El símbolo del contrato de futuros.
+
+        Returns:
+            np.ndarray: Un array NumPy que contiene los datos de precios históricos.
+        """
+        # Reemplace esta lógica con su implementación real de carga de datos
+        # Por ejemplo, podría usar self.binance_adapter.get_historical_futures_data
+        # para obtener los datos y luego procesarlos en un array NumPy
         # ...
-        return 10  # Ejemplo de apalancamiento
+        return np.random.rand(10)  # Ejemplo de datos aleatorios
 
     def run(self):
         """
@@ -183,7 +248,7 @@ class TreanModel:
         # Realizar operaciones de comercio mientras se entrena el modelo
         while not self.training_stopped:
             # Obtener la lista de símbolos de futuros perpetuos
-            futures_list = self.binance_adapter.get_perpetual_futures_list()
+            futures_list = self.binance_adapter.get_perpetual_futures_list()  # Llama al método get_perpetual_futures_list de BinanceAdp
 
             # Iterar sobre los símbolos y realizar operaciones de comercio
             for symbol in futures_list:

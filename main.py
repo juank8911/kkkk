@@ -43,7 +43,7 @@ def iniciar_entrenamiento():
                           metrics=['accuracy'])
 
             # Entrenar el modelo
-            trean_model = TreanModel(api_key=api_key, secret_key=secret_key, tfrecords_path="src/aitrini/tets/treaninData/ohlcv_data.tfrecords", input_shape=input_shape, target_shape=(1,))
+            trean_model = TreanModel(api_key=api_key, secret_key=secret_key, input_shape=input_shape, target_shape=(1,))
             trean_model.run()
 
             # Guardar el modelo entrenado
@@ -62,7 +62,7 @@ def iniciar_entrenamiento():
                       metrics=['accuracy'])
 
         # Entrenar el modelo
-        trean_model = TreanModel(api_key=api_key, secret_key=secret_key, tfrecords_path="src/aitrini/tets/treaninData/ohlcv_data.tfrecords", input_shape=input_shape, target_shape=(1,))
+        trean_model = TreanModel(api_key=api_key, secret_key=secret_key, input_shape=input_shape, target_shape=(1,))
         trean_model.run()
 
         # Guardar el modelo entrenado

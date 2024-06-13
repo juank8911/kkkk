@@ -35,7 +35,6 @@ class BinanceAdp:
         Obtiene datos históricos de OHLCV para un contrato de futuros perpetuo en Binance y los convierte a TFRecords.
 
         Args:
-            symbol (str): Símbolo del contrato de futuros perpetuo (por ejemplo, "BTCUSDT").
             timeframe (str): Intervalo de tiempo para los datos históricos (por ejemplo, "1m", "5m", "1h").
             minutes_ago (int): Número de minutos para retroceder en el tiempo para los datos históricos.
 
@@ -45,7 +44,7 @@ class BinanceAdp:
         """
 
         # Obtener datos históricos de BinanceServ
-        historical_data_json = self.binance_service.get_historical_futures_data(symbol, 3, 30*10000)
+        historical_data_json = BinanceServ.get_historical_futures_data(self,3, 30*10000)
 
         if historical_data_json is None:
             return None
@@ -99,8 +98,8 @@ class BinanceAdp:
         Returns:
             list: Una lista de símbolos de futuros perpetuos (por ejemplo, ["BTCUSDT", "ETHUSDT", "BNBUSDT"]).
         """
-
-        return self.binance_service.get_perpetual_futures_list()  # Llama al método de BinanceServ
+        self.binance_service = BinanceServ
+        return self.binance_service.get_perpetual_futures_list(self)  # Llama al método de BinanceServ
 
     # Agrega otras funciones para interactuar con la API de Binance según sea necesario
     # ...
