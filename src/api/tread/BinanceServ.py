@@ -1,10 +1,9 @@
-# src/api/tread/binanceAdp.py
+# src/api/tread/binanceServ.py
 
 import os
 import ccxt
 import time
 import json
-
 class BinanceServ:
     """
     Binance API adapter

@@ -1,6 +1,10 @@
-# UPGPR/src/aitrini/base/Trinity.py
-
+# src/aitrini/base/Trinity.py
 import tensorflow as tf
+import os
+import dotenv
+
+# Load environment variables from .env
+dotenv.load_dotenv()
 
 # Define the model
 def create_model(input_shape):
@@ -14,13 +18,50 @@ def create_model(input_shape):
 # Define the input shape (replace with your actual input shape)
 input_shape = (10,)  # Example: 10 features
 
-# Compile the model
-trinity = create_model(input_shape)
-trinity.compile(optimizer='adam',
-              loss='binary_crossentropy',
-              metrics=['accuracy'])
+# Check if the training results file exists and if the accuracy is above 80%
+training_results_file = "src/aitrini/tets/treaninData/training_results.txt"
+if os.path.exists(training_results_file):
+    with open(training_results_file, "r") as f:
+        accuracy = float(f.readline().strip().split(":")[1])
+        if accuracy >= 0.8:
+            print("Modelo Trinity ya entrenado con una precisión del 80% o más.")
+            # Load the trained model
+            model = tf.keras.models.load_model("src/aitrini/tets/treaninData/Trinity.keras")
+        else:
+            print("Modelo Trinity necesita entrenamiento.")
+            # Create and compile the model
+            model = create_model(input_shape)
+            model.compile(optimizer='adam',
+                          loss='binary_crossentropy',
+                          metrics=['accuracy'])
+            # Train the model (call the training function from TreanModel.py)
+            from src.aitrini.treaning.TreanModel import TreanModel
+            api_key = os.getenv("API_KEY")
+            secret_key = os.getenv("SECRET_KEY")
+            trean_model = TreanModel(api_key=api_key, secret_key=secret_key, tfrecords_path="src/aitrini/tets/treaninData/ohlcv_data.tfrecords", input_shape=input_shape, target_shape=(1,))
+            trean_model.train()
+            # Save the trained model
+            model.save("src/aitrini/tets/treaninData/Trinity.keras")
+            # Save the training results
+            with open(training_results_file, "w") as f:
+                f.write(f"Accuracy: {accuracy}")
+else:
+    print("Modelo Trinity necesita entrenamiento.")
+    # Create and compile the model
+    model = create_model(input_shape)
+    model.compile(optimizer='adam',
+                  loss='binary_crossentropy',
+                  metrics=['accuracy'])
+    # Train the model (call the training function from TreanModel.py)
+    from src.aitrini.treaning.TreanModel import TreanModel
+    api_key = os.getenv("api_key")
+    secret_key = os.getenv("secret_key")
+    trean_model = TreanModel(api_key=api_key, secret_key=secret_key, tfrecords_path="src/aitrini/tets/treaninData/ohlcv_data.tfrecords", input_shape=input_shape, target_shape=(1,))
+    trean_model.train()
+    # Save the trained model
+    model.save("src/aitrini/tets/treaninData/Trinity.keras")
+    # Save the training results
+    with open(training_results_file, "w") as f:
+        f.write(f"Accuracy: {accuracy}")
 
-# Save the model
-trinity.save('Trinity.h5')
-
-print("Modelo Trinity creado y guardado en Trinity.h5")
+print("Modelo Trinity creado y guardado en Trinity.keras")
