@@ -1,8 +1,8 @@
 # src/aitrini/treaning/TreanModel.py
 import tensorflow as tf
 import pandas as pd
-from src.aitrini.base.Trinity import create_model  # Importar la función create_model
-from ..api.BinanceAdp import BinanceAdp  # Importar la clase BinanceAdp
+from ...aitrini.base.Trinity import create_model  # Importar la función create_model
+from ...api.BinanceAdp import BinanceAdp  # Importar la clase BinanceAdp
 import time
 import ccxt
 import os
@@ -36,8 +36,8 @@ class TreanModel:
         # Crear el modelo Trinity
         self.model = create_model(input_shape)
         self.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-                         loss='binary_crossentropy',
-                         metrics=['accuracy'])
+                          loss='binary_crossentropy',
+                          metrics=['accuracy'])
 
         # Variables para seguimiento de ganancias
         self.total_profit = 0
@@ -56,7 +56,7 @@ class TreanModel:
             batch_size (int): El tamaño del lote de entrenamiento.
         """
         # Obtener datos históricos de BinanceAdp
-        tfrecords_path = self.binance_adapter.get_historical_futures_data("15s", 10800, 1000)  # 3 horas en segundos (10800), velas de 15 segundos ("15s") y 1000 velas
+        tfrecords_path = self.binance_adapter.get_historical_futures_data("BTCUSDT", "30s", 10800)  # 3 horas en segundos (10800) y velas de 30 segundos ("30s")
 
         # Cargar los datos de entrenamiento desde TFRecords
         self.train_dataset = tf.data.TFRecordDataset(tfrecords_path).map(self.parse_tfrecord)
@@ -93,7 +93,7 @@ class TreanModel:
             leverage (int): El apalancamiento a utilizar.
         """
         # Obtener datos históricos
-        historical_data = self.binance_adapter.get_historical_futures_data(timeframe, minutes_ago, 1000)  # 3 horas en segundos (10800), velas de 15 segundos ("15s") y 1000 velas
+        historical_data = self.binance_adapter.get_historical_futures_data(symbol, timeframe, minutes_ago)
 
         # Convertir los datos a un DataFrame de Pandas
         df = pd.DataFrame(historical_data["data"])
@@ -105,74 +105,77 @@ class TreanModel:
         # Simular la compra o venta
         self.simulate_trade(symbol, prediction, leverage)
 
-    def simulate_trade(self, symbol, prediction, leverage):
-        """
-        Simulates a buy or sell trade with dynamic profit targets and time limits.
+    import time
 
-        Args:
-            symbol (str): The futures contract symbol.
-            prediction (float): The model's prediction.
-            leverage (int): The leverage to use.
-        """
+def simulate_trade(self, symbol, prediction, leverage):
+    """
+    Simulates a buy or sell trade with dynamic profit targets and time limits.
 
-        self.total_trades += 1
-        current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+    Args:
+        symbol (str): The futures contract symbol.
+        prediction (float): The model's prediction.
+        leverage (int): The leverage to use.
+    """
 
-        if prediction > 0.5:  # Buy trade
-            # Minimum profit target and time limits
-            min_profit_per_30_seconds = 0.0015 * leverage
-            max_trade_duration_seconds = 300  # 5 minutes
+    self.total_trades += 1
+    current_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
 
-            # Calculate initial profit target
-            target_price = current_price * (1 + min_profit_per_30_seconds)
+    if prediction > 0.5:  # Buy trade
+        # Minimum profit target and time limits
+        min_profit_per_30_seconds = 0.0015 * leverage
+        max_trade_duration_seconds = 300  # 5 minutes
 
-            # Simulate trade with dynamic profit target and time limit
-            profit = 0
-            start_time = time.time()
-            while profit < min_profit_per_30_seconds and (time.time() - start_time) < max_trade_duration_seconds:
-                # Check current price and update profit
-                new_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
-                profit = (new_price - current_price) * leverage
+        # Calculate initial profit target
+        target_price = current_price * (1 + min_profit_per_30_seconds)
 
-                # Adjust profit target if necessary
-                elapsed_time_seconds = time.time() - start_time
-                if elapsed_time_seconds % 30 == 0:
-                    min_profit_per_30_seconds += 0.0015 * leverage
-                    target_price = current_price * (1 + min_profit_per_30_seconds)
+        # Simulate trade with dynamic profit target and time limit
+        profit = 0
+        start_time = time.time()
+        while profit < min_profit_per_30_seconds and (time.time() - start_time) < max_trade_duration_seconds:
+            # Check current price and update profit
+            new_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+            profit = (new_price - current_price) * leverage
 
-                # Sleep for 1 second
-                time.sleep(1)
+            # Adjust profit target if necessary
+            elapsed_time_seconds = time.time() - start_time
+            if elapsed_time_seconds % 30 == 0:
+                min_profit_per_30_seconds += 0.0015 * leverage
+                target_price = current_price * (1 + min_profit_per_30_seconds)
 
-            # Print trade summary
-            print(f"Compra simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+            # Sleep for 1 second
+            time.sleep(1)
 
-        else:  # Sell trade
-            # Minimum profit target and time limits
-            min_profit_per_30_seconds = 0.0015 * leverage
-            max_trade_duration_seconds = 300  # 5 minutes
+        # Print trade summary
+        print(f"Compra simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
 
-            # Calculate initial profit target
-            target_price = current_price * (1 - min_profit_per_30_seconds)
+    else:  # Sell trade
+        # Minimum profit target and time limits
+        min_profit_per_30_seconds = 0.0015 * leverage
+        max_trade_duration_seconds = 300  # 5 minutes
 
-            # Simulate trade with dynamic profit target and time limit
-            profit = 0
-            start_time = time.time()
-            while profit < min_profit_per_30_seconds and (time.time() - start_time) < max_trade_duration_seconds:
-                # Check current price and update profit
-                new_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
-                profit = (current_price - new_price) * leverage
+        # Calculate initial profit target
+        target_price = current_price * (1 - min_profit_per_30_seconds)
 
-                # Adjust profit target if necessary
-                elapsed_time_seconds = time.time() - start_time
-                if elapsed_time_seconds % 30 == 0:
-                    min_profit_per_30_seconds += 0.0015 * leverage
-                    target_price = current_price * (1 - min_profit_per_30_seconds)
+        # Simulate trade with dynamic profit target and time limit
+        profit = 0
+        start_time = time.time()
+        while profit < min_profit_per_30_seconds and (time.time() - start_time) < max_trade_duration_seconds:
+            # Check current price and update profit
+            new_price = self.binance_adapter.exchange.fetch_ticker(symbol)["last"]
+            profit = (current_price - new_price) * leverage
 
-                # Sleep for 1 second
-                time.sleep(1)
+            # Adjust profit target if necessary
+            elapsed_time_seconds = time.time() - start_time
+            if elapsed_time_seconds % 30 == 0:
+                min_profit_per_30_seconds += 0.0015 * leverage
+                target_price = current_price * (1 - min_profit_per_30_seconds)
 
-            # Print trade summary
-            print(f"Venta simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+            # Sleep for 1 second
+            time.sleep(1)
+
+        # Print trade summary
+        print(f"Venta simulada de {symbol} con un apalancamiento de {leverage}. Ganancia: {profit:.2f}")
+
 
     def close_position(self, symbol):
         """
@@ -253,7 +256,7 @@ class TreanModel:
                 leverage = self.get_optimal_leverage(symbol)
 
                 # Realizar una operación de comercio
-                self.trade(symbol, "15s", 10800, leverage)  # 3 horas en segundos (10800), velas de 15 segundos ("15s") y 1000 velas
+                self.trade(symbol, "30s", 10800, leverage) # 3 horas en segundos (10800) y velas de 30 segundos ("30s")
 
             # Esperar un poco antes de la siguiente iteración
             time.sleep(1)
@@ -264,25 +267,4 @@ class TreanModel:
             print(f"Porcentaje de ganancia total: {total_profit_percentage:.2f}%")
         else:
             print("No se realizaron operaciones de comercio.")
-
-    def parse_tfrecord(self, example_proto):
-        """
-        Parses a TFRecord example.
-
-        Args:
-            example_proto (tf.train.Example): The TFRecord example.
-
-        Returns:
-            tuple: A tuple containing the features and target.
-        """
-        features = {
-            "timestamp": tf.io.FixedLenFeature([], tf.int64),
-            "open": tf.io.FixedLenFeature([], tf.float32),
-            "high": tf.io.FixedLenFeature([], tf.float32),
-            "low": tf.io.FixedLenFeature([], tf.float32),
-            "close": tf.io.FixedLenFeature([], tf.float32),
-            "volume": tf.io.FixedLenFeature([], tf.int64),
-        }
-        parsed_features = tf.io.parse_single_example(example_proto, features)
-        return parsed_features["close"], parsed_features["close"]  # Assuming you want to predict the next close price
 

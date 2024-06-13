@@ -1,5 +1,4 @@
-# UPGPR/src/aitrini/base/Trinity.py
-
+# src/aitrini/base/Trinity.py
 import tensorflow as tf
 
 # Define the model
@@ -14,13 +13,3 @@ def create_model(input_shape):
 # Define the input shape (replace with your actual input shape)
 input_shape = (10,)  # Example: 10 features
 
-# Compile the model
-trinity = create_model(input_shape)
-trinity.compile(optimizer='adam',
-              loss='binary_crossentropy',
-              metrics=['accuracy'])
-
-# Save the model
-trinity.save('Trinity.h5')
-
-print("Modelo Trinity creado y guardado en Trinity.h5")

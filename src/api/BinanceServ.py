@@ -4,6 +4,10 @@ import os
 import ccxt
 import time
 import json
+import dotenv
+
+dotenv.load_dotenv()  # Load environment variables from .env
+
 class BinanceServ:
     """
     Binance API adapter
@@ -11,27 +15,20 @@ class BinanceServ:
         Devuelve un token que se debe almacenar en memoria
     """
 
-    def __init__(self, api_key, secret_key):
+    def __init__(self):
         """
         Inicializa la conexión con la API de Binance.
-
-        Args:
-            api_key (str): La clave API de Binance.
-            secret_key (str): La clave secreta de Binance.
         """
+        api_key = os.getenv('api_key')
+        secret_key = os.getenv('secret_key')
         self.exchange = ccxt.binance({
             'apiKey': api_key,
             'secret': secret_key,
         })
 
-    def get_historical_futures_data(self, symbol, timeframe, minutes_ago):
+    def get_historical_futures_data(self):
         """
-        Obtiene datos históricos de OHLCV para un contrato de futuros perpetuo en Binance.
-
-        Args:
-            symbol (str): Símbolo del contrato de futuros perpetuo (por ejemplo, "BTCUSDT").
-            timeframe (str): Intervalo de tiempo para los datos históricos (por ejemplo, "1m", "5m", "1h").
-            minutes_ago (int): Número de minutos para retroceder en el tiempo para los datos históricos.
+        Obtiene datos históricos de OHLCV para todos los contratos de futuros perpetuos en Binance.
 
         Returns:
             dict: Un diccionario que contiene los datos históricos de OHLCV en formato JSON.
@@ -43,23 +40,26 @@ class BinanceServ:
             perpetual_futures = [
                 market for market in self.exchange.fetch_markets() if market['contractType'] == 'PERPETUAL'
             ]
-            if symbol not in [market['symbol'] for market in perpetual_futures]:
-                print(f"Error: El símbolo '{symbol}' no es un contrato de futuros perpetuo en Binance.")
-                return None
-
-            # Calcular la marca de tiempo para 'minutes_ago' antes de la hora actual
-            now = int(time.time())
-            since = now - (minutes_ago * 60)
-
-            # Obtener datos históricos de OHLCV
-            ohlcv_data = self.exchange.fetch_ohlcv(symbol, timeframe, since=since)
 
             # Crear un diccionario para almacenar los datos
-            data_dict = {
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "data": ohlcv_data
-            }
+            data_dict = {}
+
+            # Iterar sobre los símbolos de futuros perpetuos
+            for market in perpetual_futures:
+                symbol = market['symbol']
+
+                # Calcular la marca de tiempo para 'minutes_ago' antes de la hora actual
+                now = int(time.time() * 1000)  # Marca de tiempo en milisegundos
+                since = now - (3 * 60 * 60 * 1000)  # 3 horas en milisegundos
+
+                # Obtener datos históricos de OHLCV
+                ohlcv_data = self.exchange.fetch_ohlcv(symbol,90,[1800, 100])  # Velas de 30 segundos, límite de 1000 velas
+
+                # Agregar los datos al diccionario
+                data_dict[symbol] = {
+                    "timeframe": "30s",
+                    "data": ohlcv_data
+                }
 
             # Convertir el diccionario a formato JSON
             historical_data_json = json.dumps(data_dict)
@@ -94,3 +94,4 @@ class BinanceServ:
 
     # Agrega otras funciones para interactuar con la API de Binance según sea necesario
     # ...
+
