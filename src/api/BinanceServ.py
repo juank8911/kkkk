@@ -19,8 +19,8 @@ class BinanceServ:
         """
         Inicializa la conexión con la API de Binance.
         """
-        api_key = os.getenv("uUWodyz9ciDyqZwTSkHPTjuazT5p4lzAKGwsEmLpTGwav3ixI0eJ6v6HKe9voY2J")
-        secret_key = os.getenv("UYAX5ECm6EvU7wJ3zPGDYN5VecqpHC7TMHn25ciM505FgrXmD1BpUFBZO2ur23nc")
+        api_key = os.getenv('api_key')
+        secret_key = os.getenv('secret_key')
         self.exchange = ccxt.binance({
             'apiKey': api_key,
             'secret': secret_key,
