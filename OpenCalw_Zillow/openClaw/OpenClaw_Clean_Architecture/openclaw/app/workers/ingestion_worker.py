@@ -1,8 +1,8 @@
 """Worker asincrono de ingestion.
 
-Consume el stream de Redis con un consumer group, procesa cada plataforma en
-paralelo y confirma el mensaje con ``XACK``. La recuperacion de mensajes
-pendientes y la dead-letter queue llegan en el sprint 3 (tareas S3-01 y S3-02).
+Consume el stream de Redis con un consumer group, procesa cada plataforma del
+catalogo en paralelo, actualiza el estado del job y confirma el mensaje con
+``XACK``. La recuperacion de pendientes y la dead-letter queue llegan en S3-01.
 """
 
 from __future__ import annotations
@@ -11,30 +11,70 @@ import asyncio
 import json
 import logging
 from typing import Any
+from uuid import UUID
 
 from app.core.config import settings
 from app.core.logging import configure_logging, job_context
 from app.core.redis_client import redis_client
+from app.models.contracts import JobStatus
+from app.services.job_store import job_store
+from app.services.platforms import InvalidPlatformError, get_platform_spec
 from app.services.scraper import extraer_con_reintentos
 
 logger = logging.getLogger("OpenClaw.Worker")
 
 
+def _estado_final(resultados: list[dict[str, Any]]) -> JobStatus:
+    exitos = sum(1 for r in resultados if r.get("status") == "exito")
+    if exitos == len(resultados):
+        return JobStatus.COMPLETED
+    if exitos == 0:
+        return JobStatus.FAILED
+    return JobStatus.PARTIAL
+
+
+async def _extraer_plataforma(clave: str, query: str) -> dict[str, Any]:
+    try:
+        spec = get_platform_spec(clave)
+    except InvalidPlatformError:
+        logger.warning("plataforma_invalida", extra={"plataforma": clave})
+        return {"plataforma": clave, "status": "plataforma_invalida"}
+
+    resultado = await extraer_con_reintentos(f"https://{spec.domain}", query)
+    return {"plataforma": clave, **resultado}
+
+
 async def _procesar_mensaje(id_mensaje: str, datos: dict[bytes, bytes]) -> None:
     payload: dict[str, Any] = json.loads(datos[b"payload"].decode("utf-8"))
-    plataformas: list[str] = payload.get("plataformas", [])
+
+    job_id_crudo = payload.get("job_id")
+    job_id = UUID(job_id_crudo) if job_id_crudo else None
     query: str = payload.get("query", "")
+    plataformas: list[str] = payload.get("plataformas", [])
 
-    with job_context(job_id=str(id_mensaje)):
-        logger.info("mensaje_recibido", extra={"plataformas": len(plataformas)})
+    with job_context(job_id=str(job_id or id_mensaje)):
+        if job_id is not None:
+            await job_store.marcar(job_id, JobStatus.RUNNING)
 
-        tareas = [extraer_con_reintentos(url, query) for url in plataformas]
+        tareas = [_extraer_plataforma(clave, query) for clave in plataformas]
         resultados = await asyncio.gather(*tareas, return_exceptions=True)
 
-        errores = sum(1 for r in resultados if isinstance(r, BaseException))
+        normalizados: list[dict[str, Any]] = []
+        for clave, resultado in zip(plataformas, resultados, strict=False):
+            if isinstance(resultado, BaseException):
+                normalizados.append({"plataforma": clave, "status": "fallo_critico"})
+            else:
+                normalizados.append(resultado)
+
+        progress = {r["plataforma"]: str(r.get("status", "desconocido")) for r in normalizados}
+        estado = _estado_final(normalizados)
+
+        if job_id is not None:
+            await job_store.marcar(job_id, estado, progress=progress)
+
         logger.info(
             "mensaje_procesado",
-            extra={"plataformas": len(plataformas), "errores": errores},
+            extra={"plataformas": len(plataformas), "estado": estado.value},
         )
 
         await redis_client.xack(

@@ -1,57 +1,75 @@
-"""Motor de extraccion con Firecrawl.
-
-El cliente se construye de forma perezosa: importar este modulo no debe exigir
-una clave configurada, porque la API y las pruebas tambien lo importan.
-"""
+"""Fachada de extracción basada en ScraperPort y FirecrawlAdapter (S1-08)."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from functools import lru_cache
 from typing import Any
 
-from firecrawl import FirecrawlApp
-
 from app.core.config import settings
-from app.services.rate_limiter import adquirir_permiso_extraccion
+from app.integrations.firecrawl_adapter import FirecrawlAdapter
+from app.integrations.scraper_port import ScrapeResult, ScraperPort, ScrapeStatus
 
 logger = logging.getLogger("OpenClaw.Scraper")
 
 
-@lru_cache(maxsize=1)
-def obtener_firecrawl() -> FirecrawlApp:
-    """Devuelve el cliente de Firecrawl, fallando si no hay clave."""
-    if not settings.FIRECRAWL_API_KEY:
-        raise RuntimeError("FIRECRAWL_API_KEY no configurada")
-    return FirecrawlApp(api_key=settings.FIRECRAWL_API_KEY)
+def build_default_scraper(
+    *,
+    client: Any | None = None,
+    timeout_seconds: float = 15.0,
+    max_attempts: int = 3,
+) -> FirecrawlAdapter:
+    """Construye una instancia de FirecrawlAdapter con la configuración activa."""
+    return FirecrawlAdapter(
+        client=client,
+        api_key=getattr(settings, "FIRECRAWL_API_KEY", None),
+        timeout_seconds=timeout_seconds,
+        max_attempts=max_attempts,
+    )
 
 
-async def extraer_con_reintentos(url: str, query: str, max_intentos: int = 3) -> dict[str, Any]:
-    dominio_base = url.replace("https://", "").replace("www.", "").split("/")[0]
+async def extraer_plataforma(
+    platform: str,
+    query: str,
+    *,
+    scraper: ScraperPort | None = None,
+) -> ScrapeResult:
+    """Extrae el markdown de una plataforma del catálogo devolviendo ScrapeResult tipado."""
+    active_scraper = scraper if scraper is not None else build_default_scraper()
+    return await active_scraper.scrape(platform=platform, query=query)
 
-    if not await adquirir_permiso_extraccion(dominio_base):
-        return {"dominio": url, "status": "rate_limited"}
 
-    intento = 0
-    while intento < max_intentos:
-        try:
-            cliente = obtener_firecrawl()
-            scrape_options = {"formats": ["markdown"], "waitFor": 3000, "proxy": True}
-            res = await asyncio.to_thread(
-                cliente.search,
-                query=f"site:{url} {query}",
-                scrape_options=scrape_options,
-            )
-            return {"dominio": url, "status": "exito", "data": res}
-        except Exception as exc:  # noqa: BLE001 - se reintenta con backoff
-            intento += 1
-            logger.warning(
-                "extraccion_fallida",
-                extra={"dominio": dominio_base, "intento": intento, "error": str(exc)},
-            )
-            if intento >= max_intentos:
-                break
-            await asyncio.sleep(2**intento)
-
-    return {"dominio": url, "status": "fallo_critico"}
+async def extraer_con_reintentos(
+    platform: str,
+    query: str,
+    max_intentos: int = 3,
+    *,
+    scraper: ScraperPort | None = None,
+) -> dict[str, Any]:
+    """Wrapper compatible con el worker legado delegando en FirecrawlAdapter."""
+    active_scraper = (
+        scraper
+        if scraper is not None
+        else build_default_scraper(max_attempts=max_intentos)
+    )
+    result = await active_scraper.scrape(platform=platform, query=query)
+    if result.ok:
+        return {
+            "dominio": result.url or platform,
+            "plataforma": result.platform,
+            "status": "exito",
+            "data": {"markdown": result.markdown, "metadata": result.metadata},
+            "attempts": result.attempts,
+        }
+    if result.status == ScrapeStatus.RATE_LIMITED:
+        return {
+            "dominio": result.url or platform,
+            "plataforma": result.platform,
+            "status": "rate_limited",
+            "error": result.error.model_dump() if result.error else None,
+        }
+    return {
+        "dominio": result.url or platform,
+        "plataforma": result.platform,
+        "status": result.status.value,
+        "error": result.error.model_dump() if result.error else None,
+    }

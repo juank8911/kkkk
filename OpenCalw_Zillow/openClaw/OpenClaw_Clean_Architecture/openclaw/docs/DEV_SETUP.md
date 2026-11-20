@@ -16,9 +16,9 @@
 4. Enviar un barrido de prueba:
 
 ```bash
-curl -X POST http://localhost:8000/v1/openclaw/iniciar-barrido \
+curl -X POST http://localhost:8000/v1/openclaw/barridos \
   -H "Content-Type: application/json" \
-  -d '{"query": "Miami", "plataformas": ["https://www.zillow.com"]}'
+  -d '{"query": "Miami, FL", "plataformas": ["zillow", "redfin"]}'
 ```
 
 ## Endpoints
@@ -27,8 +27,14 @@ curl -X POST http://localhost:8000/v1/openclaw/iniciar-barrido \
 |---|---|---|---|
 | GET | `/health` | Liveness | Disponible |
 | GET | `/readyz` | Readiness con chequeo de Redis | Disponible |
-| POST | `/v1/openclaw/iniciar-barrido` | Encola un barrido | Sin validacion aun (S1-03) |
-| POST | `/v1/webhook/telegram-comando` | Comando `/buy` | En modo simulado desde S2-07 |
+| POST | `/v1/openclaw/barridos` | Valida y encola un barrido | Disponible (S1-03) |
+| GET | `/v1/openclaw/barridos/{job_id}` | Estado y progreso del barrido | Disponible (S1-04) |
+| POST | `/v1/webhook/telegram-comando` | Comando `/buy` | 403 salvo `BUY_MODE=sandbox` |
+
+Las plataformas se envian como claves del catalogo cerrado (`zillow`, `realtor`,
+`redfin`, `trulia`, `loopnet`, `craigslist`, `century21`, `coldwell`, `remax`),
+nunca como URL. Todos los errores usan el contrato `ErrorResponse` con los
+campos `code`, `message`, `details` y `timestamp`.
 
 ## Variables de entorno
 

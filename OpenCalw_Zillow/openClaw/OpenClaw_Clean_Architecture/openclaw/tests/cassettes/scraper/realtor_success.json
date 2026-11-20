@@ -1,0 +1,17 @@
+{
+  "name": "realtor_success",
+  "platform": "realtor",
+  "query": "Detroit MI",
+  "behavior": "response",
+  "response": {
+    "success": true,
+    "data": {
+      "markdown": "# 8842 Oakwood Dr, Detroit, MI 48219\n\nList Price: $92,500\nCounty: Wayne County\nMonthly Rent: $1,250/mo\nListing URL: https://www.realtor.com/realestateandhomes-detail/8842-oakwood-dr_M9911\n\n![Exterior](https://ap.rdcpix.com/8842-exterior.jpg)\n\nDescription:\nTurnkey bungalow with detached garage, new water heater, and immediate cash-flow potential.",
+      "metadata": {
+        "statusCode": 200,
+        "title": "Detroit, MI Homes for Sale - Realtor.com",
+        "sourceURL": "https://www.realtor.com/realestateandhomes-search/Detroit-MI"
+      }
+    }
+  }
+}

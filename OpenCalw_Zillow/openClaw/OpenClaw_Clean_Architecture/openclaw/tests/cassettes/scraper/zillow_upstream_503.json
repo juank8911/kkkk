@@ -1,0 +1,8 @@
+{
+  "name": "zillow_upstream_503",
+  "platform": "zillow",
+  "query": "Orlando FL",
+  "behavior": "http_error",
+  "status_code": 503,
+  "message": "Firecrawl upstream 503 Service Unavailable"
+}

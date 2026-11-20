@@ -1,0 +1,8 @@
+{
+  "name": "trulia_rate_limited_429",
+  "platform": "trulia",
+  "query": "Tampa FL",
+  "behavior": "http_error",
+  "status_code": 429,
+  "message": "HTTP 429 Too Many Requests from upstream WAF"
+}
