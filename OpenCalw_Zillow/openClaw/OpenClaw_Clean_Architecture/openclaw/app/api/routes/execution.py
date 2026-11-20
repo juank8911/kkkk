@@ -130,10 +130,18 @@ async def procesar_comando_telegram(
 
     texto = str(mensaje.get("text", "")).strip()
     if not texto.startswith("/buy"):
-        if texto and not texto.startswith("/"):
+        cmd = texto.split(maxsplit=1)[0].lower().split("@", 1)[0] if texto else ""
+        if cmd in ("/msg", "/vendedor", "/reporte", "/negociaciones") or (
+            texto and not texto.startswith("/")
+        ):
             resultado = await procesar_interaccion_telegram(update)
-            if resultado.get("status") == "negociacion_iniciada":
-                return {"status": "Negociación iniciada"}
+            estado_res = str(resultado.get("status") or "")
+            if estado_res in (
+                "negociacion_iniciada",
+                "comunicacion_vendedor_registrada",
+                "reporte_enviado",
+            ):
+                return {"status": estado_res}
         return {"status": "Comando ignorado"}
 
     if settings.BUY_MODE != "sandbox":

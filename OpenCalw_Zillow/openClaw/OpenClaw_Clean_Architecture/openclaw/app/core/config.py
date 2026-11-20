@@ -51,7 +51,9 @@ class Settings(BaseSettings):
     GEOCODING_URL: str = "https://nominatim.openstreetmap.org/search"
     GEOCODING_USER_AGENT: str = "OpenClaw/0.2 (+dev1@openclaw.local)"
     GEOCODING_TTL_SEGUNDOS: int = Field(default=2592000, ge=3600)
-    CENSUS_GEOCODING_URL: str = "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress"
+    CENSUS_GEOCODING_URL: str = (
+        "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress"
+    )
     CENSUS_GEOCODING_BENCHMARK: str = "Public_AR_Current"
     OLLAMA_BASE_URL: str = "https://resuciter.jeikeisolutions.com/ollama"
     OLLAMA_API_KEY: str = ""
@@ -70,6 +72,13 @@ class Settings(BaseSettings):
     AUTO_SWEEP_MARKET_LIMIT: int = Field(default=1, ge=1, le=1)
     AUTO_SWEEP_PLATFORMS: str = "zillow,realtor,redfin"
     AUTO_SWEEP_LOCK_TTL_SEGUNDOS: int = Field(default=21600, ge=300)
+    NEGOTIATION_LANGUAGE: str = "en-US"
+    NEGOTIATION_DOWN_PAYMENT_MIN_USD: float = Field(default=5000.0, ge=0.0)
+    NEGOTIATION_DOWN_PAYMENT_MAX_USD: float = Field(default=7000.0, ge=0.0)
+    NEGOTIATION_BONUS_EXTRA_MONTHS: int = Field(default=6, ge=0, le=36)
+    NEGOTIATION_REPORT_HOUR: int = Field(default=11, ge=0, le=23)
+    NEGOTIATION_REPORT_MINUTE: int = Field(default=0, ge=0, le=59)
+    NEGOTIATION_REPORT_TZ: str = "America/New_York"
 
     FIRECRAWL_API_KEY: str = ""
     OPENCLAW_API_KEY: str = ""

@@ -1,11 +1,13 @@
 """Flujo interactivo de aprobación, rechazo y negociación supervisada en Telegram.
 
-Reglas de cumplimiento:
+Reglas de cumplimiento y estrategia:
 - Toda aprobación, rechazo e inicio de negociación requiere acción humana explícita.
-- No se envían correos, SMS ni ofertas vinculantes automáticamente a terceros:
-  al iniciar la negociación se registra la `Oferta` (estado `propuesta`) +
-  `OfertaEvento` en PostgreSQL y se devuelve el borrador listo para revisión y
-  envío humano con el precio, condiciones, URL de publicación y contacto/vendedor.
+- Estrategia por defecto en EE. UU.: Seller Financing con cuota inicial baja de
+  $5,000 a $7,000 USD y bono adicional de 6 cuotas mensuales al finalizar el pago
+  del crédito. Todos los borradores dirigidos al vendedor se redactan en inglés.
+- Monitoreo de mensajes del vendedor vía `/msg <id> <texto>` (o `/vendedor`) y
+  reporte de estado bajo demanda vía `/reporte` (o `/negociaciones`), además del
+  reporte diario automático a las 11:00 AM.
 """
 
 from __future__ import annotations
@@ -16,6 +18,9 @@ import re
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
+
+from app.core.config import settings
 from app.core.redis_client import redis_client
 from app.db.models import Decision, Oferta, Propiedad
 from app.db.offers_repository import RepositorioOfertas
@@ -24,6 +29,12 @@ from app.models.offers import OfertaEstado
 from app.orchestrator.nodes.telegram_alert import (
     TelegramNotifierAdapter,
     extraer_contacto_vendedor,
+)
+from app.services.negotiation_reporter import (
+    construir_mensaje_ingles_vendedor,
+    construir_respuesta_ingles_vendedor,
+    consultar_negociaciones_y_generar_reporte,
+    estrategia_seller_financing_resumen,
 )
 
 logger = logging.getLogger("OpenClaw.TelegramWorkflow")
@@ -59,18 +70,23 @@ def parsear_instrucciones_negociacion(
     *,
     precio_publicado_usd: float,
 ) -> tuple[float, str, bool]:
-    """Interpreta las instrucciones del usuario devolviendo `(precio_oferta, condiciones, sin_condiciones)`.
+    """Interpreta instrucciones devolviendo `(precio_oferta, condiciones_extra, sin_condiciones)`.
 
     Si el usuario no escribe ninguna condición (o escribe `ninguna`/`tal cual`/`continuar`),
-    mantiene exactamente `precio_publicado_usd`.
+    mantiene `precio_publicado_usd` y aplica la estrategia Seller Financing por defecto
+    ($5,000–$7,000 de cuota inicial + bono de 6 cuotas adicionales tras liquidar el crédito).
     """
     limpio = " ".join((texto or "").strip().split())
+    dp_min = settings.NEGOTIATION_DOWN_PAYMENT_MIN_USD
+    dp_max = settings.NEGOTIATION_DOWN_PAYMENT_MAX_USD
+    bonus_m = settings.NEGOTIATION_BONUS_EXTRA_MONTHS
+    estrategia_base = (
+        f"Seller Financing (low down payment target ${dp_min:,.0f}-${dp_max:,.0f} USD, "
+        f"bonus of {bonus_m} extra monthly payments after full loan payoff; English outreach)."
+    )
+
     if limpio.lower() in _SIN_CONDICIONES_FRASES:
-        return (
-            round(precio_publicado_usd, 2),
-            "Sin condiciones adicionales; iniciar con el precio publicado de la vivienda.",
-            True,
-        )
+        return round(precio_publicado_usd, 2), estrategia_base, True
 
     precio_objetivo = precio_publicado_usd
     m = _PRECIO_INSTRUCCION_RE.search(limpio)
@@ -97,15 +113,16 @@ def construir_borrador_negociacion(
     precio_oferta_usd: float,
     condiciones: str,
     contacto_vendedor: str,
+    sin_condiciones: bool = True,
 ) -> str:
-    """Genera un borrador no vinculante listo para enviar al vendedor o agente."""
-    return (
-        f"Hola ({contacto_vendedor}),\n"
-        f"Estoy interesado en la propiedad ubicada en {ubicacion} ({url_origen}).\n"
-        f"Precio publicado: ${precio_publicado_usd:,.0f} | Propuesta inicial: ${precio_oferta_usd:,.0f}.\n"
-        f"Condiciones: {condiciones}\n"
-        "Quedo atento para confirmar disponibilidad, divulgaciones y siguientes pasos.\n"
-        "[Borrador no vinculante generado por OpenClaw — requiere envío y firma humana]"
+    """Genera el borrador inicial en inglés (Seller Financing $5k–$7k + bono 6 cuotas)."""
+    return construir_mensaje_ingles_vendedor(
+        ubicacion=ubicacion,
+        url_origen=url_origen,
+        precio_publicado_usd=precio_publicado_usd,
+        precio_oferta_usd=precio_oferta_usd,
+        condiciones_extra=None if sin_condiciones else condiciones,
+        contacto_vendedor=contacto_vendedor,
     )
 
 
@@ -182,7 +199,7 @@ async def _iniciar_negociacion_propiedad(
             precio_publicado_usd=precio_pub,
         )
         contacto = extraer_contacto_vendedor(prop.descripcion_cruda) or (
-            f"Vendedor / agente en publicación ({prop.plataforma})"
+            f"Seller / listing agent ({prop.plataforma})"
         )
 
         repo_ofertas = RepositorioOfertas(unidad.sesion)
@@ -190,19 +207,24 @@ async def _iniciar_negociacion_propiedad(
             propiedad_id=prop.id,
             estado=OfertaEstado.PROPUESTA.value,
             importe_usd=precio_oferta,
-            notas=f"Contacto: {contacto} | Condiciones: {condiciones}",
+            notas=(
+                f"Strategy: Seller Financing (${settings.NEGOTIATION_DOWN_PAYMENT_MIN_USD:,.0f}-"
+                f"${settings.NEGOTIATION_DOWN_PAYMENT_MAX_USD:,.0f} down + "
+                f"{settings.NEGOTIATION_BONUS_EXTRA_MONTHS} extra monthly payments bonus) | "
+                f"Contact: {contacto} | Terms: {condiciones}"
+            ),
             actor_ultima_actualizacion=f"telegram:{chat_id}",
         )
         guardada = await repo_ofertas.crear(
             oferta,
             notas_evento=(
-                "Negociación iniciada desde Telegram "
+                "Negociación Seller Financing (EN) iniciada desde Telegram "
                 f"({'tal cual' if sin_condiciones else 'con instrucciones'}): {condiciones}"
             ),
         )
         await unidad.eventos.registrar(
             "negociacion.iniciada_telegram",
-            f"Negociación iniciada para {prop.ubicacion} por ${precio_oferta:,.0f}",
+            f"Negociación Seller Financing iniciada para {prop.ubicacion} por ${precio_oferta:,.0f}",
             job_id=prop.job_id,
             nivel="info",
             payload={
@@ -211,6 +233,10 @@ async def _iniciar_negociacion_propiedad(
                 "precio_publicado_usd": precio_pub,
                 "precio_oferta_usd": precio_oferta,
                 "sin_condiciones": sin_condiciones,
+                "idioma_vendedor": settings.NEGOTIATION_LANGUAGE,
+                "down_payment_min_usd": settings.NEGOTIATION_DOWN_PAYMENT_MIN_USD,
+                "down_payment_max_usd": settings.NEGOTIATION_DOWN_PAYMENT_MAX_USD,
+                "bonus_extra_months": settings.NEGOTIATION_BONUS_EXTRA_MONTHS,
                 "contacto_vendedor": contacto,
                 "url_origen": prop.url_origen,
                 "condiciones": condiciones,
@@ -220,12 +246,143 @@ async def _iniciar_negociacion_propiedad(
         return guardada, prop, condiciones, contacto, sin_condiciones
 
 
+async def registrar_comunicacion_vendedor(
+    oferta_ref: str,
+    mensaje_vendedor: str,
+    *,
+    chat_id: str,
+) -> tuple[Oferta, Propiedad, str, dict[str, object]] | None:
+    """Registra una comunicación del vendedor, actualiza contraoferta si aplica y redacta respuesta EN."""
+    ref_limpia = oferta_ref.strip().lower()
+    if not ref_limpia or not mensaje_vendedor.strip():
+        return None
+
+    async with unidad_de_trabajo() as unidad:
+        res = await unidad.sesion.execute(
+            select(Oferta, Propiedad)
+            .join(Propiedad, Propiedad.id == Oferta.propiedad_id)
+            .order_by(Oferta.actualizada_en.desc())
+            .limit(100)
+        )
+        encontrada: tuple[Oferta, Propiedad] | None = None
+        for oferta, prop in res.all():
+            oid = str(oferta.id).lower()
+            if oid == ref_limpia or oid.startswith(ref_limpia):
+                encontrada = (oferta, prop)
+                break
+        if encontrada is None:
+            return None
+
+        oferta, prop = encontrada
+        borrador_en, analisis = construir_respuesta_ingles_vendedor(
+            ubicacion=prop.ubicacion,
+            mensaje_vendedor=mensaje_vendedor,
+            precio_oferta_actual_usd=float(oferta.importe_usd),
+        )
+        repo_ofertas = RepositorioOfertas(unidad.sesion)
+        precio_vendedor = analisis.get("precio_solicitado_usd")
+        if (
+            isinstance(precio_vendedor, int | float)
+            and oferta.estado == OfertaEstado.PROPUESTA.value
+        ):
+            await repo_ofertas.cambiar_estado(
+                oferta,
+                OfertaEstado.CONTRAOFERTA,
+                actor="vendedor",
+                notas=f"mensaje_vendedor: {mensaje_vendedor[:500]}",
+                importe_contraoferta_usd=float(precio_vendedor),
+            )
+        else:
+            from app.db.models import OfertaEvento
+
+            unidad.sesion.add(
+                OfertaEvento(
+                    oferta_id=oferta.id,
+                    estado_anterior=oferta.estado,
+                    estado_nuevo=oferta.estado,
+                    actor="vendedor",
+                    notas=f"mensaje_vendedor: {mensaje_vendedor[:500]}",
+                )
+            )
+            await unidad.sesion.flush()
+
+        await unidad.eventos.registrar(
+            "negociacion.mensaje_vendedor",
+            f"Comunicación del vendedor registrada en oferta {str(oferta.id)[:8]}",
+            job_id=prop.job_id,
+            nivel="info",
+            payload={
+                "oferta_id": str(oferta.id),
+                "propiedad_id": str(prop.id),
+                "chat_id": chat_id,
+                "analisis": analisis,
+            },
+        )
+        await unidad.confirmar()
+        return oferta, prop, borrador_en, analisis
+
+
+async def _manejar_comando_texto(
+    chat_id: str,
+    texto: str,
+    *,
+    bot: TelegramNotifierAdapter,
+) -> dict[str, Any] | None:
+    """Procesa comandos de monitoreo: `/reporte`, `/negociaciones`, `/msg` y `/vendedor`."""
+    partes = texto.split(maxsplit=2)
+    cmd = partes[0].lower().split("@", 1)[0]
+
+    if cmd in ("/reporte", "/negociaciones"):
+        reporte = await consultar_negociaciones_y_generar_reporte()
+        await bot.send_message(chat_id, reporte)
+        return {"status": "reporte_enviado"}
+
+    if cmd in ("/msg", "/vendedor"):
+        if len(partes) < 3:
+            await bot.send_message(
+                chat_id,
+                "Uso: /msg <ID_oferta_8_chars> <mensaje del vendedor>\n"
+                "Ejemplo: /msg a1b2c3d4 Seller asks $10,000 down and $54,000 price.",
+            )
+            return {"status": "msg_uso_invalido"}
+
+        oferta_ref, msg_vendedor = partes[1], partes[2]
+        reg = await registrar_comunicacion_vendedor(oferta_ref, msg_vendedor, chat_id=chat_id)
+        if reg is None:
+            await bot.send_message(
+                chat_id,
+                f"No encontré ninguna oferta activa con referencia '{oferta_ref}'. Usa /reporte para ver los IDs.",
+            )
+            return {"status": "oferta_no_encontrada"}
+
+        oferta, prop, borrador_en, analisis = reg
+        precio_det = analisis.get("precio_solicitado_usd")
+        resumen_det = (
+            f"Precio mencionado: ${float(precio_det):,.0f}"
+            if isinstance(precio_det, int | float)
+            else "Sin cambio explícito de precio"
+        )
+        await bot.send_message(
+            chat_id,
+            "📩 COMUNICACIÓN DEL VENDEDOR REGISTRADA\n"
+            f"Oferta: {str(oferta.id)[:8]} ({oferta.estado.upper()})\n"
+            f"Propiedad: {prop.ubicacion}\n"
+            f"Análisis: {resumen_det} | Seller Financing mencionado: "
+            f"{'Sí' if analisis.get('menciona_seller_financing') else 'No'}\n\n"
+            f"Borrador de respuesta en inglés (Seller Financing $5k–$7k + bono 6 cuotas):\n\n"
+            f"{borrador_en}",
+        )
+        return {"status": "comunicacion_vendedor_registrada", "oferta_id": str(oferta.id)}
+
+    return None
+
+
 async def procesar_interaccion_telegram(
     update: dict[str, Any],
     *,
     notifier: TelegramNotifierAdapter | None = None,
 ) -> dict[str, Any]:
-    """Procesa botones inline (`callback_query`) y respuestas de instrucciones de negociación."""
+    """Procesa botones inline (`callback_query`), comandos de monitoreo y respuestas de negociación."""
     bot = notifier if notifier is not None else TelegramNotifierAdapter()
 
     # 1. Botones inline (callback_query)
@@ -253,7 +410,7 @@ async def procesar_interaccion_telegram(
                 return {"status": "propiedad_no_encontrada"}
 
             contacto = extraer_contacto_vendedor(prop.descripcion_cruda) or (
-                f"Vendedor / agente en publicación ({prop.plataforma})"
+                f"Seller / listing agent ({prop.plataforma})"
             )
             precio_pub = float(prop.precio_usd)
             await _guardar_pendiente(
@@ -272,17 +429,19 @@ async def procesar_interaccion_telegram(
                 f"Propiedad: {prop.ubicacion}\n"
                 f"Precio publicado: ${precio_pub:,.0f}\n"
                 f"Contacto/Vendedor: {contacto}\n"
-                f"Publicación: {prop.url_origen}\n\n"
-                "✍️ Escribe ahora tus instrucciones o condiciones para negociar "
-                "(ej: ofrecer $48,000, cierre en 21 días, inspección).\n"
+                f"Publicación: {prop.url_origen}\n"
+                f"Estrategia por defecto: {estrategia_seller_financing_resumen()}\n\n"
+                "✍️ Escribe condiciones adicionales si deseas ajustar algo "
+                "(ej: precio objetivo, días de cierre, reparaciones).\n"
                 "Si no escribes ninguna condición, pulsa 'Iniciar tal cual' o escribe "
-                "'continuar' para iniciar con el precio publicado y el contacto del vendedor."
+                "'continuar' para generar el primer mensaje en inglés con Seller Financing "
+                "($5,000–$7,000 inicial + bono de 6 cuotas extra)."
             )
             botones_prompt = {
                 "inline_keyboard": [
                     [
                         {
-                            "text": f"▶️ Iniciar tal cual (${precio_pub:,.0f})",
+                            "text": f"▶️ Iniciar tal cual (${precio_pub:,.0f} · Seller Financing)",
                             "callback_data": f"neg_go:{prop.id}",
                         }
                     ],
@@ -315,7 +474,7 @@ async def procesar_interaccion_telegram(
             if resultado is None:
                 await bot.answer_callback_query(cb_id, "Propiedad no encontrada")
                 return {"status": "propiedad_no_encontrada"}
-            oferta, prop, condiciones, contacto, _sin_cond = resultado
+            oferta, prop, condiciones, contacto, sin_cond = resultado
             borrador = construir_borrador_negociacion(
                 ubicacion=prop.ubicacion,
                 url_origen=prop.url_origen,
@@ -323,17 +482,20 @@ async def procesar_interaccion_telegram(
                 precio_oferta_usd=float(oferta.importe_usd),
                 condiciones=condiciones,
                 contacto_vendedor=contacto,
+                sin_condiciones=sin_cond,
             )
-            await bot.answer_callback_query(cb_id, "Negociación iniciada tal cual")
+            await bot.answer_callback_query(cb_id, "Negociación Seller Financing iniciada (EN)")
             await bot.send_message(
                 chat_id,
-                "🤝 NEGOCIACIÓN INICIADA (TAL CUAL)\n"
-                f"Oferta ID: {oferta.id}\n"
+                "🤝 NEGOCIACIÓN INICIADA (SELLER FINANCING · INGLÉS)\n"
+                f"Oferta ID: {str(oferta.id)[:8]} ({oferta.id})\n"
                 f"Propiedad: {prop.ubicacion}\n"
                 f"Precio inicio: ${float(oferta.importe_usd):,.0f}\n"
+                f"Estrategia: {estrategia_seller_financing_resumen()}\n"
                 f"Contacto/Vendedor: {contacto}\n"
                 f"Publicación: {prop.url_origen}\n\n"
-                f"Borrador listo para enviar:\n{borrador}",
+                f"Borrador en inglés listo para enviar al vendedor:\n\n{borrador}\n\n"
+                f"Cuando el vendedor responda, regístralo con:\n/msg {str(oferta.id)[:8]} <mensaje del vendedor>",
             )
             return {"status": "negociacion_iniciada", "oferta_id": str(oferta.id)}
 
@@ -346,12 +508,16 @@ async def procesar_interaccion_telegram(
         await bot.answer_callback_query(cb_id, "Acción desconocida")
         return {"status": "callback_ignorado"}
 
-    # 2. Mensaje de texto cuando hay una negociación pendiente esperando instrucciones
+    # 2. Mensajes de texto: comandos de monitoreo o instrucciones para negociación pendiente
     mensaje = update.get("message") or {}
     chat_id = str((mensaje.get("chat") or {}).get("id") or "")
     texto = str(mensaje.get("text") or "").strip()
-    if not chat_id or not texto or texto.startswith("/"):
+    if not chat_id or not texto:
         return {"status": "sin_accion"}
+
+    if texto.startswith("/"):
+        res_cmd = await _manejar_comando_texto(chat_id, texto, bot=bot)
+        return res_cmd if res_cmd is not None else {"status": "sin_accion"}
 
     pendiente = await _leer_pendiente(chat_id)
     if pendiente is None:
@@ -381,17 +547,22 @@ async def procesar_interaccion_telegram(
         precio_oferta_usd=float(oferta.importe_usd),
         condiciones=condiciones,
         contacto_vendedor=contacto,
+        sin_condiciones=sin_cond,
     )
-    modo_txt = "TAL CUAL" if sin_cond else "CON TUS INSTRUCCIONES"
+    modo_txt = (
+        "TAL CUAL · SELLER FINANCING" if sin_cond else "CON TUS INSTRUCCIONES · SELLER FINANCING"
+    )
     await bot.send_message(
         chat_id,
         f"🤝 NEGOCIACIÓN INICIADA ({modo_txt})\n"
-        f"Oferta ID: {oferta.id}\n"
+        f"Oferta ID: {str(oferta.id)[:8]} ({oferta.id})\n"
         f"Propiedad: {prop.ubicacion}\n"
         f"Precio propuesto: ${float(oferta.importe_usd):,.0f}\n"
+        f"Estrategia: {estrategia_seller_financing_resumen()}\n"
         f"Contacto/Vendedor: {contacto}\n"
         f"Publicación: {prop.url_origen}\n\n"
-        f"Borrador listo para enviar:\n{borrador}",
+        f"Borrador en inglés listo para enviar al vendedor:\n\n{borrador}\n\n"
+        f"Cuando el vendedor responda, regístralo con:\n/msg {str(oferta.id)[:8]} <mensaje del vendedor>",
     )
     return {
         "status": "negociacion_iniciada",

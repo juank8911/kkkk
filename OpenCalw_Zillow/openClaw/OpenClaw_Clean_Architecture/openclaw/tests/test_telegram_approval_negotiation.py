@@ -130,7 +130,9 @@ def test_parsear_instrucciones_negociacion_sin_condiciones_y_con_condiciones() -
     )
     assert precio == 54000.0
     assert sin_cond is True
-    assert "precio publicado" in cond.lower()
+    assert "seller financing" in cond.lower()
+    assert "$5,000-$7,000" in cond
+    assert "6 extra monthly payments" in cond.lower()
 
     precio2, cond2, sin_cond2 = parsear_instrucciones_negociacion(
         "ofrecer $48,500 al contado y cierre en 15 días",
@@ -217,7 +219,10 @@ async def test_flujo_interactivo_aprobar_instrucciones_tal_cual_y_rechazar(monke
     assert res_go["status"] == "negociacion_iniciada"
     assert res_go["sin_condiciones"] is True
     assert ofertas_creadas[-1]["importe_usd"] == 54000.0
-    assert "NEGOCIACIÓN INICIADA (TAL CUAL)" in spy.sent[-1]["text"]
+    assert "NEGOCIACIÓN INICIADA (TAL CUAL · SELLER FINANCING)" in spy.sent[-1]["text"]
+    assert "Seller Financing" in spy.sent[-1]["text"]
+    assert "$5,000 to $7,000 USD" in spy.sent[-1]["text"]
+    assert "6 extra monthly payments" in spy.sent[-1]["text"]
     assert prop.url_origen in spy.sent[-1]["text"]
 
     # 3. Usuario pulsa Aprobar otra vez y escribe condiciones personalizadas

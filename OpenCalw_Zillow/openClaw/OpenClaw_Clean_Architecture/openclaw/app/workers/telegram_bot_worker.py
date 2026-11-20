@@ -1,8 +1,11 @@
-"""Worker de long-polling de Telegram para botones de aprobación y negociación en local.
+"""Worker de Telegram: botones interactivos, monitoreo de mensajes y reporte diario 11:00 AM.
 
-Permite responder a los botones inline (`✅ Aprobar / Negociar`, `❌ Rechazar`,
-`▶️ Iniciar tal cual`) y a las instrucciones escritas en Telegram incluso sin
-webhook HTTPS público. Respeta `TG_ALLOWED_CHAT_IDS` y deduplicación en Redis.
+Ejecuta dos tareas concurrentes:
+1. Long-polling (`getUpdates`) para botones inline (`✅ Aprobar / Negociar`,
+   `❌ Rechazar`, `▶️ Iniciar tal cual`), instrucciones de negociación y comandos
+   `/msg`, `/vendedor`, `/reporte` y `/negociaciones` (si no hay webhook externo).
+2. Programador diario de reporte de estado de negociaciones a las 11:00 AM
+   (`NEGOTIATION_REPORT_HOUR=11`, `NEGOTIATION_REPORT_TZ=America/New_York`).
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.redis_client import redis_client
+from app.services.negotiation_reporter import enviar_reporte_diario_si_corresponde
 from app.services.telegram_workflow import procesar_interaccion_telegram
 
 logger = logging.getLogger("OpenClaw.TelegramBotWorker")
@@ -44,14 +48,26 @@ async def _es_nuevo(update_id: int) -> bool:
     return bool(creado)
 
 
-async def consumir_updates_telegram() -> None:
-    configure_logging(settings.LOG_LEVEL, settings.LOG_JSON)
-    token = settings.TG_TOKEN.strip()
-    if not token:
-        logger.warning("telegram_bot_worker_sin_token")
-        return
+async def _bucle_reporte_diario() -> None:
+    """Verifica cada 60 s si ya son las 11:00 AM para emitir el reporte diario."""
+    logger.info(
+        "reporte_diario_scheduler_inicio",
+        extra={
+            "hora": f"{settings.NEGOTIATION_REPORT_HOUR:02d}:{settings.NEGOTIATION_REPORT_MINUTE:02d}",
+            "tz": settings.NEGOTIATION_REPORT_TZ,
+        },
+    )
+    while True:
+        try:
+            await enviar_reporte_diario_si_corresponde()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - nunca detener el scheduler
+            logger.warning("reporte_diario_scheduler_error", extra={"error": str(exc)})
+        await asyncio.sleep(60)
 
-    logger.info("telegram_bot_worker_inicio")
+
+async def _bucle_polling(token: str) -> None:
     offset: int | None = None
     crudo_offset = await redis_client.get(OFFSET_KEY)
     if crudo_offset is not None:
@@ -64,7 +80,6 @@ async def consumir_updates_telegram() -> None:
 
     base_url = f"https://api.telegram.org/bot{token}"
     async with httpx.AsyncClient(timeout=35.0) as client:
-        # Si hay webhook activo externo, evitamos colisionar con getUpdates
         try:
             wh = (await client.get(f"{base_url}/getWebhookInfo")).json()
             if (wh.get("result") or {}).get("url"):
@@ -96,7 +111,8 @@ async def consumir_updates_telegram() -> None:
                     autorizados = settings.chats_autorizados
                     if autorizados and chat_id not in autorizados:
                         logger.warning(
-                            "telegram_poll_chat_no_autorizado", extra={"chat_id": str(chat_id)}
+                            "telegram_poll_chat_no_autorizado",
+                            extra={"chat_id": str(chat_id)},
                         )
                         continue
                     resultado = await procesar_interaccion_telegram(upd)
@@ -106,6 +122,17 @@ async def consumir_updates_telegram() -> None:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("telegram_poll_error", extra={"error": str(exc)})
                 await asyncio.sleep(3)
+
+
+async def consumir_updates_telegram() -> None:
+    configure_logging(settings.LOG_LEVEL, settings.LOG_JSON)
+    token = settings.TG_TOKEN.strip()
+    if not token:
+        logger.warning("telegram_bot_worker_sin_token")
+        return
+
+    logger.info("telegram_bot_worker_inicio")
+    await asyncio.gather(_bucle_polling(token), _bucle_reporte_diario())
 
 
 def main() -> None:
