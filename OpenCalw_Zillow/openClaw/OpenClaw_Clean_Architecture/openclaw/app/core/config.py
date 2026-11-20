@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     OFERTA_TRACKER_LOCK_TTL_SEGUNDOS: int = Field(default=900, ge=60)
     OFERTA_TRACKER_MAX_OFERTAS_LOTE: int = Field(default=50, ge=1, le=500)
     REDIS_STREAM_DLQ_OFERTAS: str = "openclaw_ofertas_dlq"
+    AUTO_SWEEP_ENABLED: bool = True
+    AUTO_SWEEP_RUN_ON_START: bool = True
+    AUTO_SWEEP_INTERVAL_SEGUNDOS: int = Field(default=86400, ge=3600)
+    AUTO_SWEEP_MARKET_LIMIT: int = Field(default=1, ge=1, le=1)
+    AUTO_SWEEP_PLATFORMS: str = "zillow,realtor,redfin"
+    AUTO_SWEEP_LOCK_TTL_SEGUNDOS: int = Field(default=21600, ge=300)
 
     FIRECRAWL_API_KEY: str = ""
     OPENCLAW_API_KEY: str = ""

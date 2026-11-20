@@ -47,3 +47,9 @@ FROM base AS offer-tracker
 HEALTHCHECK NONE
 
 CMD ["python", "-m", "app.workers.offer_tracker"]
+
+FROM base AS auto-sweeper
+
+HEALTHCHECK NONE
+
+CMD ["python", "-m", "app.workers.auto_sweeper"]
