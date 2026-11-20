@@ -33,3 +33,9 @@ FROM base AS worker
 HEALTHCHECK NONE
 
 CMD ["python", "-m", "app.workers.ingestion_worker"]
+
+FROM base AS offer-tracker
+
+HEALTHCHECK NONE
+
+CMD ["python", "-m", "app.workers.offer_tracker"]
