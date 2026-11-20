@@ -1,6 +1,7 @@
 # Entorno de trabajo y artefactos
 .work/
 .venv/
+.env
 __pycache__/
 *.pyc
 .pytest_cache/
