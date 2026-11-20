@@ -1,0 +1,131 @@
+REVISION DEL SISTEMA OPENCLAW
+Fecha: 20 de noviembre de 2026
+Codigo revisado: OpenClaw_Clean_Architecture/openclaw
+
+RESUMEN
+OpenClaw es una base de sistema para buscar y evaluar oportunidades inmobiliarias. Usa FastAPI, Redis Streams, Firecrawl y workers asincronos. Recibe una consulta, la coloca en Redis y el worker intenta extraer informacion en paralelo. Tambien contiene un modelo de propiedad, un calculo financiero basico, un calculo preliminar de CAPEX/retorno y una alerta Telegram.
+
+La implementacion actual NO contiene todas las funciones descritas en las actualizaciones. Las fases 95 a 117 deben considerarse especificacion pendiente. No existen actualmente los modulos de seguridad Zero-Trust, circuit breaker WAF, WebSocket de telemetria, persistencia de resultados, seguimiento de cartera, auditoria legal, metricas Prometheus, contratos, escrow, negociador NLP, tesoreria DeFi, adquisicion off-market, AGNET RPC ni oraculo geoespacial.
+
+ESTADO GENERAL
+Prototipo funcional parcial. No esta listo para produccion ni para ejecutar operaciones financieras reales.
+
+ARQUITECTURA PRESENTE
+1. API Gateway
+- main.py crea una aplicacion FastAPI y registra ingestion y execution.
+- POST /v1/openclaw/iniciar-barrido recibe query y plataformas y publica en el stream Redis openclaw_scraping_queue.
+- POST /v1/webhook/telegram-comando reconoce /buy y actualmente solicita un retiro fijo de 125000 USDT hacia fiat_bridge_bank. Esto es una operacion sensible y no debe ejecutarse sin autenticacion, autorizacion, confirmacion, idempotencia y auditoria.
+
+2. Cola y worker
+- ingestion_worker.py usa Redis Streams, consumer group scrapers, XREADGROUP y XACK.
+- No se ve un despliegue que demuestre como se inicia el worker junto a la API.
+- La respuesta del worker no se devuelve al usuario ni se guarda en un almacen consultable.
+
+3. Extraccion
+- scraper.py usa Firecrawl, reintentos y espera exponencial.
+- rate_limiter.py aplica limites por dominio mediante Redis.
+- El codigo actual trata plataformas como URLs, mientras la actualizacion propone claves como zillow, realtor y redfin. Debe definirse un contrato unico.
+- El limitador permite continuar si Redis falla, politica fail-open que debe revisarse.
+
+4. Modelo y orquestacion
+- property.py define DatosPropiedadNormalizados.
+- El modelo no se usa actualmente para validar y normalizar resultados.
+- workflow.py solo tiene el enrutador due diligence; LangGraph no esta compilado ni conectado.
+- financial.py calcula gastos, NOI y cap rate, rechazando cap rate menor de 8 por ciento.
+- vision.py usa un CAPEX fijo de 15000 USD y no analiza imagenes.
+- telegram_alert.py envia alertas, pero no verifica respuesta ni errores.
+
+ACTUALIZACIONES DOCUMENTALES
+Fases 0 a 94: base conceptual de esquema, scraping, Redis Streams, gateway, analisis financiero, vision, Telegram y due diligence. La base existe solo parcialmente y falta integrar el grafo.
+
+Fases 95 a 104 solicitan:
+- seguimiento post-oferta;
+- estratega macro;
+- auditoria legal;
+- WebSocket de telemetria;
+- seguridad Zero-Trust;
+- despliegue Docker con Redis, pgvector, workers, Prometheus y Grafana;
+- metricas Prometheus;
+- cartas de intencion PDF;
+- puente escrow;
+- negociador de contraofertas.
+
+Ninguno de esos modulos aparece en el arbol actual.
+
+Fases 110 a 117 solicitan:
+- validacion y manejo de errores del gateway;
+- autenticacion con X-OpenClaw-Tactical-Key;
+- circuit breaker adaptativo por plataforma;
+- worker para nueve plataformas;
+- telemetria Redis Pub/Sub y WebSocket;
+- tesoreria DeFi;
+- adquisicion off-market y SMS;
+- endpoint AGNET RPC con EIP-712 y USDC;
+- oraculo geoespacial y Gentrification Score.
+
+Estos componentes tampoco estan presentes. Las capacidades de evasión WAF, skip tracing, SMS, DeFi y liquidacion on-chain requieren revision legal, de seguridad y de cumplimiento antes de implementarse.
+
+RIESGOS PRIORITARIOS
+- Falta el grafo LangGraph ejecutable.
+- No existe persistencia de jobs, propiedades, resultados, estados, errores ni auditoria.
+- Payload incompleto en ingestion.py puede producir error no controlado en lugar de HTTP 400.
+- No hay validacion Pydantic de requests ni plataformas permitidas.
+- main.py no registra telemetria ni health/readiness.
+- Hay contratos Redis distintos entre codigo y documentos; se debe escoger una sola estrategia de consumer groups, reintentos y dead-letter queue.
+- Falta integracion activa del LLM y algunas dependencias implicitas no estan declaradas.
+- La ingesta no tiene autenticacion Zero-Trust.
+- /buy no valida chat autorizado, firma, monto, saldo, nonce, contexto ni respuesta del servicio externo.
+- Monto y destino del retiro estan fijos en el codigo.
+- No hay timeout, idempotency key ni auditoria para la llamada financiera.
+- FIRECRAWL_API_KEY tiene valor por defecto demo.
+- El rate limiter permite continuar cuando Redis falla.
+- No hay pruebas automatizadas, Dockerfile, docker-compose, migraciones ni observabilidad completa.
+- vision.py usa CAPEX fijo y telegram_alert.py puede bloquear el worker por usar requests sincrono.
+
+PLAN RECOMENDADO
+FASE A: estabilizar el nucleo
+1. Definir modelos Pydantic para requests, respuestas, propiedades y jobs.
+2. Validar payloads y errores HTTP.
+3. Elegir catalogo de plataformas o contrato de URLs.
+4. Separar API, worker y orquestador como procesos ejecutables.
+5. Añadir health checks.
+6. Crear almacenamiento de jobs, resultados, errores y estados.
+7. Añadir reintentos, dead-letter queue y recuperacion de pendientes.
+
+FASE B: seguridad
+1. Incorporar autenticacion para la ingesta.
+2. Restringir Telegram al chat autorizado.
+3. Eliminar monto y destino fijos.
+4. Exigir confirmacion de dos pasos para acciones financieras.
+5. Añadir idempotencia, limites, timeouts, auditoria y sandbox.
+6. Gestionar secretos sin valores demo.
+
+FASE C: flujo de analisis
+1. Compilar LangGraph con estados y transiciones explicitos.
+2. Conectar extraccion, normalizacion, finanzas, vision, auditoria legal y notificacion.
+3. Sustituir CAPEX fijo por estimacion trazable o marcarlo como no disponible.
+4. Guardar cada decision y sus entradas.
+5. Implementar seguimiento post-oferta solo despues de persistencia y pruebas.
+
+FASE D: observabilidad y despliegue
+1. Añadir metricas, logs estructurados, correlation IDs y trazas.
+2. Añadir WebSocket/SSE autenticado.
+3. Crear Dockerfile, composicion y readiness probes.
+4. Crear pruebas unitarias, integracion, contrato y carga controlada.
+
+FASE E: integraciones avanzadas
+Implementar contratos, escrow, servicios off-market, SMS, DeFi, EIP-712 y oraculos solo despues de revision legal y de seguridad. Empezar en sandbox, con permisos minimos, limites e interruptor de apagado.
+
+CRITERIOS MINIMOS DE PRUEBA INTEGRADA
+- La ingesta exige autenticacion y devuelve 400 para payload incompleto.
+- Cada job tiene ID y estados queued, running, completed o failed.
+- Las propiedades se validan contra DatosPropiedadNormalizados y se guardan con su origen.
+- El worker procesa sin perdida y tiene ACK, reintentos y dead-letter queue.
+- El grafo ejecuta las etapas y conserva decisiones.
+- Telegram solo notifica al chat autorizado y registra errores.
+- /buy esta desactivado en produccion o funciona solo en sandbox con confirmacion e idempotencia.
+- Hay pruebas de conectividad de Redis, Firecrawl y variables de entorno.
+- Hay pruebas para autenticacion, validacion, rate limiting, worker, finanzas y errores.
+
+CONCLUSION
+OpenClaw es un esqueleto bien orientado para un pipeline inmobiliario asincrono, pero esta entre prototipo e integracion. Las actualizaciones describen una hoja de ruta, no codigo ya instalado. La prioridad es consolidar el nucleo, proteger el webhook financiero, implementar persistencia y orquestacion, y despues incorporar telemetria y modulos avanzados de forma controlada.
