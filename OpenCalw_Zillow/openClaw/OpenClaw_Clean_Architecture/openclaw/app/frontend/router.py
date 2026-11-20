@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 from fastapi.responses import HTMLResponse
+
+from app.api.routes import ingestion
+from app.models.contracts import BarridoRequest, JobResponse
 
 PANEL_HTML_PATH = Path(__file__).resolve().parent / "panel.html"
 
@@ -17,3 +21,24 @@ async def servir_panel_jobs() -> HTMLResponse:
     """Devuelve el panel HTML autocontenido para listar jobs, ver detalle y leer telemetría WS."""
     html = PANEL_HTML_PATH.read_text(encoding="utf-8")
     return HTMLResponse(content=html, status_code=200)
+
+
+@router.post(
+    "/panel/api/barridos",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Crea un barrido desde el panel sin exponer la API key",
+)
+async def crear_barrido_desde_panel(payload: BarridoRequest) -> JobResponse:
+    """Encola un barrido usando internamente la misma lógica protegida de la API."""
+    return await ingestion.crear_barrido(payload)
+
+
+@router.get(
+    "/panel/api/barridos/{job_id}",
+    response_model=JobResponse,
+    summary="Consulta un job desde el panel sin exponer la API key",
+)
+async def consultar_barrido_desde_panel(job_id: UUID) -> JobResponse:
+    """Consulta el estado del job sin enviar la clave táctica al navegador."""
+    return await ingestion.consultar_barrido(job_id)
