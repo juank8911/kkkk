@@ -16,8 +16,58 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import settings
+from app.services.geocoding import geocodificar_census
 
 logger = logging.getLogger("OpenClaw.OllamaExtractor")
+
+_CONDADO_POR_MERCADO: dict[str, str] = {
+    "detroit, mi": "Wayne",
+    "cleveland, oh": "Cuyahoga",
+    "flint, mi": "Genesee",
+    "toledo, oh": "Lucas",
+    "birmingham, al": "Jefferson",
+    "memphis, tn": "Shelby",
+    "jackson, ms": "Hinds",
+    "saginaw, mi": "Saginaw",
+    "dayton, oh": "Montgomery",
+    "akron, oh": "Summit",
+    "st. louis, mo": "St. Louis",
+    "baltimore, md": "Baltimore",
+    "pittsburgh, pa": "Allegheny",
+    "youngstown, oh": "Mahoning",
+    "little rock, ar": "Pulaski",
+    "augusta, ga": "Richmond",
+    "macon, ga": "Bibb",
+    "shreveport, la": "Caddo",
+    "montgomery, al": "Montgomery",
+    "peoria, il": "Peoria",
+    "indianapolis, in": "Marion",
+    "milwaukee, wi": "Milwaukee",
+    "rochester, ny": "Monroe",
+    "buffalo, ny": "Erie",
+    "syracuse, ny": "Onondaga",
+    "kansas city, mo": "Jackson",
+    "tulsa, ok": "Tulsa",
+    "oklahoma city, ok": "Oklahoma",
+    "decatur, il": "Macon",
+    "gary, in": "Lake",
+}
+
+
+def inferir_condado_por_mercado(ciudad: str | None, query: str) -> str | None:
+    """Devuelve el condado canónico conocido para mercados objetivo cuando falta en la ficha."""
+    candidatos = [query.strip().lower()]
+    if ciudad:
+        candidatos.insert(0, ciudad.strip().lower())
+    for texto in candidatos:
+        limpio = " ".join(texto.split())
+        if limpio in _CONDADO_POR_MERCADO:
+            return _CONDADO_POR_MERCADO[limpio]
+        for clave, condado in _CONDADO_POR_MERCADO.items():
+            ciudad_clave = clave.split(",")[0].strip()
+            if ciudad_clave and ciudad_clave in limpio:
+                return condado
+    return None
 
 
 class OllamaListing(BaseModel):
@@ -86,25 +136,91 @@ def _json_content(content: str) -> dict[str, Any]:
     return parsed
 
 
-def _listing_markdown(item: OllamaListing, *, platform: str, fallback_url: str | None) -> str:
+def _listing_markdown(
+    item: OllamaListing,
+    *,
+    platform: str,
+    fallback_url: str | None,
+    query: str = "",
+) -> str:
     """Convierte salida estructurada a bloques compatibles con el normalizador existente."""
     source = item.url or item.source_id or fallback_url or "ollama:sin_source_id"
+    precio_txt = f"${item.precio_usd:,.2f}" if item.precio_usd is not None else "N/A"
+    renta_txt = (
+        f"${item.renta_mensual_usd:,.2f}/mo" if item.renta_mensual_usd is not None else "N/A"
+    )
+    condado = item.condado or inferir_condado_por_mercado(item.ciudad, query)
+    direccion = item.direccion or "N/A"
+    if direccion != "N/A" and item.ciudad and item.ciudad.lower() not in direccion.lower():
+        direccion = f"{direccion}, {item.ciudad}"
+        if item.codigo_postal and item.codigo_postal not in direccion:
+            direccion = f"{direccion} {item.codigo_postal}"
     lines = [
         f"Listing URL: {source}",
-        f"Property Address: {item.direccion or 'N/A'}",
+        f"Property Address: {direccion}",
         f"City: {item.ciudad or 'N/A'}",
         f"Zip Code: {item.codigo_postal or 'N/A'}",
-        f"County: {item.condado or 'N/A'}",
-        f"Price: {item.precio_usd if item.precio_usd is not None else 'N/A'}",
+        f"County: {condado or 'Por verificar'}",
+        f"Price: {precio_txt}",
         f"Bedrooms: {item.habitaciones if item.habitaciones is not None else 'N/A'}",
         f"Bathrooms: {item.banos if item.banos is not None else 'N/A'}",
-        f"Estimated Rent: {item.renta_mensual_usd if item.renta_mensual_usd is not None else 'N/A'}",
-        f"Description: {item.descripcion or 'N/A'}",
+        f"Estimated Rent: {renta_txt}",
+        f"Description: {item.descripcion or f'Anuncio extraído en {platform} para {direccion}'}",
         f"Extraction Source: Ollama {settings.OLLAMA_MODEL} ({platform})",
     ]
     if item.imagenes:
         lines.extend(f"![listing image]({url})" for url in item.imagenes)
     return "\n".join(lines)
+
+
+async def enriquecer_ubicacion_extraccion(
+    extraction: OllamaExtraction,
+    *,
+    query: str,
+) -> OllamaExtraction:
+    """Completa condado/ciudad/ZIP con Census Geocoder cuando faltan en la tarjeta."""
+    actualizadas: list[OllamaListing] = []
+    for item in extraction.viviendas_en_venta:
+        if item.condado or not item.direccion:
+            actualizadas.append(item)
+            continue
+        direccion_consulta = item.direccion
+        if item.ciudad and item.ciudad.lower() not in direccion_consulta.lower():
+            direccion_consulta = f"{direccion_consulta}, {item.ciudad}"
+        elif (
+            query
+            and "," in query
+            and query.split(",")[0].strip().lower() not in direccion_consulta.lower()
+        ):
+            direccion_consulta = f"{direccion_consulta}, {query}"
+        if item.codigo_postal and item.codigo_postal not in direccion_consulta:
+            direccion_consulta = f"{direccion_consulta} {item.codigo_postal}"
+
+        condado_resuelto: str | None = None
+        ciudad_resuelta = item.ciudad
+        zip_resuelto = item.codigo_postal
+        try:
+            ubicacion = await geocodificar_census(direccion_consulta)
+            if ubicacion is not None:
+                condado_resuelto = ubicacion.condado
+                ciudad_resuelta = ciudad_resuelta or ubicacion.ciudad
+                zip_resuelto = zip_resuelto or ubicacion.codigo_postal
+        except Exception as exc:  # noqa: BLE001 - enriquecimiento best-effort
+            logger.debug("census_enrichment_skipped", extra={"error": str(exc)})
+
+        if not condado_resuelto:
+            condado_resuelto = inferir_condado_por_mercado(ciudad_resuelta, query)
+
+        actualizadas.append(
+            item.model_copy(
+                update={
+                    "condado": condado_resuelto,
+                    "ciudad": ciudad_resuelta,
+                    "codigo_postal": zip_resuelto,
+                }
+            )
+        )
+    return extraction.model_copy(update={"viviendas_en_venta": actualizadas})
 
 
 async def extraer_viviendas_ollama(
@@ -138,7 +254,9 @@ async def extraer_viviendas_ollama(
     propio = cliente is None
     http = cliente or httpx.AsyncClient(timeout=settings.OLLAMA_TIMEOUT_SEGUNDOS)
     try:
-        respuesta = await http.post(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat", headers=headers, json=payload)
+        respuesta = await http.post(
+            f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat", headers=headers, json=payload
+        )
         respuesta.raise_for_status()
         body = respuesta.json()
         content = ((body.get("message") or {}).get("content") or "").strip()
@@ -149,7 +267,11 @@ async def extraer_viviendas_ollama(
                     item.model_copy(
                         update={
                             "url": item.url if item.url and item.url in markdown else url_origen,
-                            "source_id": item.source_id if item.source_id and item.source_id in markdown else None,
+                            "source_id": (
+                                item.source_id
+                                if item.source_id and item.source_id in markdown
+                                else None
+                            ),
                         }
                     )
                     for item in extraction.viviendas_en_venta
@@ -170,9 +292,10 @@ def extraction_to_markdown(
     *,
     platform: str,
     url_origen: str | None,
+    query: str = "",
 ) -> str:
     """Serializa anuncios extraídos para reutilizar validación y persistencia existentes."""
     return "\n\n---\n\n".join(
-        _listing_markdown(item, platform=platform, fallback_url=url_origen)
+        _listing_markdown(item, platform=platform, fallback_url=url_origen, query=query)
         for item in extraction.viviendas_en_venta
     )

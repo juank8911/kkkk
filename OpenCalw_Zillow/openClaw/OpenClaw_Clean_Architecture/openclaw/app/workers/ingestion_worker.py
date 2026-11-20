@@ -31,15 +31,18 @@ from app.core.redis_client import redis_client
 from app.db.models import Job
 from app.db.uow import unidad_de_trabajo
 from app.models.contracts import JobStatus
+from app.orchestrator.decisiones import estado_inicial_desde_orm, evaluar_y_registrar_decision
+from app.orchestrator.nodes.telegram_alert import RedisAlertDedupeStore
 from app.services import idempotency
 from app.services.domain_semaphore import semaforos
-from app.services.platforms import InvalidPlatformError, get_platform_spec
-from app.services.scraper import extraer_con_reintentos
 from app.services.ingestion_pipeline import procesar_lote_extraccion_con_uow
 from app.services.ollama_listing_extractor import (
+    enriquecer_ubicacion_extraccion,
     extraction_to_markdown,
     extraer_viviendas_ollama,
 )
+from app.services.platforms import InvalidPlatformError, get_platform_spec
+from app.services.scraper import extraer_con_reintentos
 from app.workers.state_machine import TransicionInvalida, aplicar_transicion
 
 logger = logging.getLogger("OpenClaw.Worker")
@@ -127,10 +130,12 @@ async def _persistir_resultado(
         url_origen=resultado.get("dominio"),
     )
     if extraction is not None:
+        extraction = await enriquecer_ubicacion_extraccion(extraction, query=query)
         markdown_para_pipeline = extraction_to_markdown(
             extraction,
             platform=str(resultado.get("plataforma") or "desconocida"),
             url_origen=resultado.get("dominio"),
+            query=query,
         )
         if not markdown_para_pipeline:
             return {
@@ -157,15 +162,54 @@ async def _persistir_resultado(
                 plataforma=str(resultado.get("plataforma") or "desconocida"),
                 markdown=markdown_para_pipeline,
                 url_origen=resultado.get("dominio"),
+                require_county=False,
             )
-        persistencia = summary.model_dump(mode="json")
+
+        evaluadas = 0
+        if summary.propiedad_ids:
+            dedupe_store = RedisAlertDedupeStore(redis_client)
+            async with unidad_de_trabajo() as unidad_eval:
+                propiedades_job = await unidad_eval.propiedades.listar_por_job(job_id)
+                ids_nuevos = set(summary.propiedad_ids)
+                for prop in propiedades_job:
+                    if prop.id not in ids_nuevos:
+                        continue
+                    try:
+                        await evaluar_y_registrar_decision(
+                            unidad_eval,
+                            propiedad_id=prop.id,
+                            estado_inicial=estado_inicial_desde_orm(prop),
+                            job_id=job_id,
+                            dedupe_store=dedupe_store,
+                        )
+                        evaluadas += 1
+                    except Exception as eval_exc:  # noqa: BLE001 - una propiedad no frena el lote
+                        logger.warning(
+                            "evaluacion_propiedad_error",
+                            extra={"propiedad_id": str(prop.id), "error": str(eval_exc)},
+                        )
+
+        persistencia = {**summary.model_dump(mode="json"), "evaluadas": evaluadas}
         logger.info(
             "resultado_scraper_persistido",
-            extra={"job_id": str(job_id), "plataforma": resultado.get("plataforma"), "persistidas": summary.persistidas},
+            extra={
+                "job_id": str(job_id),
+                "plataforma": resultado.get("plataforma"),
+                "persistidas": summary.persistidas,
+            },
         )
-        extra = {"modelo": settings.OLLAMA_MODEL, "viviendas": len(extraction.viviendas_en_venta)} if extraction else {"fallback": extraction_error or "ollama_no_configurado"}
+        extra = (
+            {"modelo": settings.OLLAMA_MODEL, "viviendas": len(extraction.viviendas_en_venta)}
+            if extraction
+            else {"fallback": extraction_error or "ollama_no_configurado"}
+        )
         if summary.normalizadas == 0:
-            return {**resultado, "status": "sin_propiedades", "extraccion": extra, "persistencia": persistencia}
+            return {
+                **resultado,
+                "status": "sin_propiedades",
+                "extraccion": extra,
+                "persistencia": persistencia,
+            }
         return {**resultado, "extraccion": extra, "persistencia": persistencia}
     except (SQLAlchemyError, ValueError) as exc:
         logger.exception("persistencia_ingesta_error", extra={"job_id": str(job_id)})

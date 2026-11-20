@@ -98,6 +98,25 @@ VALID_PLATFORM_KEYS: Final[tuple[str, ...]] = tuple(sorted(PLATFORM_CATALOG.keys
 _PATH_SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[^a-zA-Z0-9,\-_ ]+")
 _SUBDOMAIN_SLUG_RE: Final[re.Pattern[str]] = re.compile(r"[^a-z0-9]+")
 _MULTI_DASH_RE: Final[re.Pattern[str]] = re.compile(r"-{2,}")
+_US_ZIP_QUERY_RE: Final[re.Pattern[str]] = re.compile(r"^\d{5}$")
+_CITY_STATE_RE: Final[re.Pattern[str]] = re.compile(r"^([a-zA-Z .'-]+?)[,\s]+([a-zA-Z]{2})$")
+
+# Redfin exige ID numérico en /city/{id}/{ST}/{City}; sin él devuelve 404.
+_REDFIN_CITY_PATHS: Final[dict[str, str]] = {
+    "memphis, tn": "11797/TN/Memphis",
+    "cleveland, oh": "4243/OH/Cleveland",
+    "detroit, mi": "5665/MI/Detroit",
+    "flint, mi": "6683/MI/Flint",
+    "jackson, ms": "9431/MS/Jackson",
+    "toledo, oh": "19323/OH/Toledo",
+    "birmingham, al": "1305/AL/Birmingham",
+    "saginaw, mi": "16773/MI/Saginaw",
+    "dayton, oh": "5049/OH/Dayton",
+    "akron, oh": "361/OH/Akron",
+    "youngstown, oh": "22370/OH/Youngstown",
+    "baltimore, md": "1363/MD/Baltimore",
+    "pittsburgh, pa": "15174/PA/Pittsburgh",
+}
 
 
 class InvalidPlatformError(ValueError):
@@ -180,11 +199,44 @@ def sanitize_query_slug(query: str, *, subdomain: bool = False) -> str:
     return quote(safe, safe="-_,")
 
 
+def _normalizar_ciudad_estado(query: str) -> tuple[str, str] | None:
+    limpio = " ".join(query.strip().split())
+    match = _CITY_STATE_RE.match(limpio)
+    if not match:
+        return None
+    ciudad = match.group(1).strip(" ,")
+    estado = match.group(2).upper()
+    if not ciudad:
+        return None
+    return ciudad, estado
+
+
 def build_platform_url(platform_key: str, query: str) -> str:
     """Construye y verifica la URL objetivo para una plataforma del catálogo."""
     spec = get_platform_spec(platform_key)
     slug = sanitize_query_slug(query, subdomain=spec.subdomain_query)
-    url = spec.url_template.format(query=slug)
+    city_state = _normalizar_ciudad_estado(query)
+
+    if spec.key == "redfin":
+        limpio = query.strip()
+        if _US_ZIP_QUERY_RE.match(limpio):
+            url = f"https://www.redfin.com/zipcode/{limpio}"
+        elif city_state is not None:
+            clave = f"{city_state[0].lower()}, {city_state[1].lower()}"
+            if clave in _REDFIN_CITY_PATHS:
+                url = f"https://www.redfin.com/city/{_REDFIN_CITY_PATHS[clave]}"
+            else:
+                url = spec.url_template.format(query=slug)
+        else:
+            url = spec.url_template.format(query=slug)
+    elif spec.key == "realtor" and city_state is not None:
+        ciudad_slug = "-".join(city_state[0].split())
+        url = spec.url_template.format(query=quote(f"{ciudad_slug}_{city_state[1]}", safe="-_"))
+    elif spec.key == "zillow" and city_state is not None:
+        ciudad_slug = "-".join(city_state[0].split())
+        url = spec.url_template.format(query=quote(f"{ciudad_slug}-{city_state[1]}", safe="-_"))
+    else:
+        url = spec.url_template.format(query=slug)
 
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()

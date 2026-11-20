@@ -156,6 +156,7 @@ class MarkdownPropertyNormalizer:
         *,
         platform: str,
         url_origen: str | None = None,
+        require_county: bool = True,
     ) -> NormalizationBatch:
         """Normaliza un markdown con uno o múltiples anuncios separados por `---`."""
         cleaned = (markdown or "").strip()
@@ -182,6 +183,7 @@ class MarkdownPropertyNormalizer:
                 block,
                 platform=platform,
                 url_origen=url_origen,
+                require_county=require_county,
             )
             if prop is not None:
                 valid_items.append(prop)
@@ -207,6 +209,7 @@ class MarkdownPropertyNormalizer:
         *,
         platform: str,
         url_origen: str | None = None,
+        require_county: bool = True,
     ) -> DatosPropiedadNormalizados:
         """Normaliza un único anuncio o lanza `NormalizationError` si está incompleto."""
         cleaned = (markdown or "").strip()
@@ -217,6 +220,7 @@ class MarkdownPropertyNormalizer:
             cleaned,
             platform=platform,
             url_origen=url_origen,
+            require_county=require_county,
         )
         if prop is None:
             raise NormalizationError(reasons)
@@ -228,6 +232,7 @@ class MarkdownPropertyNormalizer:
         *,
         platform: str,
         url_origen: str | None,
+        require_county: bool = True,
     ) -> tuple[DatosPropiedadNormalizados | None, list[str], str | None]:
         reasons: list[str] = []
 
@@ -247,7 +252,10 @@ class MarkdownPropertyNormalizer:
 
         condado = _extract_county(block)
         if not condado:
-            reasons.append("missing_county")
+            if require_county:
+                reasons.append("missing_county")
+            else:
+                condado = "Por verificar"
 
         ingreso_anual = _extract_annual_income(block)
         imagenes = _extract_images(block)
@@ -509,12 +517,14 @@ def normalizar_markdown_propiedades(
     *,
     plataforma: str,
     url_origen: str | None = None,
+    require_county: bool = True,
 ) -> NormalizationBatch:
     """Función de conveniencia para normalizar uno o varios anuncios desde markdown."""
     return _default_normalizer.normalize_batch(
         markdown,
         platform=plataforma,
         url_origen=url_origen,
+        require_county=require_county,
     )
 
 
@@ -523,10 +533,12 @@ def normalizar_propiedad_unica(
     *,
     plataforma: str,
     url_origen: str | None = None,
+    require_county: bool = True,
 ) -> DatosPropiedadNormalizados:
     """Normaliza un anuncio individual o lanza `NormalizationError` si es incompleto."""
     return _default_normalizer.normalize_single(
         markdown,
         platform=plataforma,
         url_origen=url_origen,
+        require_county=require_county,
     )

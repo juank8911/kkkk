@@ -98,12 +98,14 @@ async def procesar_lote_extraccion_con_uow(
     plataforma: str,
     markdown: str,
     url_origen: str | None = None,
+    require_county: bool = True,
 ) -> IngestionBatchSummary:
     """Normaliza, enriquece, deduplica y persiste un lote usando una transacción por propiedad."""
     batch = normalizar_markdown_propiedades(
         markdown,
         plataforma=plataforma,
         url_origen=url_origen,
+        require_county=require_county,
     )
 
     if batch.rejected:

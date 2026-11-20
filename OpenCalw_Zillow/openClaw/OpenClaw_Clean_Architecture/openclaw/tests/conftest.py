@@ -25,6 +25,8 @@ def entorno_test(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "APP_ENV", "test")
     monkeypatch.setattr(settings, "OPENCLAW_API_KEY", CLAVE_PRUEBA)
     monkeypatch.setattr(settings, "OPENCLAW_API_KEY_SHA256", "")
+    monkeypatch.setattr(settings, "TG_ALLOWED_CHAT_IDS", "")
+    monkeypatch.setattr(settings, "TG_WEBHOOK_SECRET", "")
 
 
 @pytest.fixture
