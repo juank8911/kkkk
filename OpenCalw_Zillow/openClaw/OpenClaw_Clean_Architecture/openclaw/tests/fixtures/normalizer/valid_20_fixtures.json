@@ -1,0 +1,262 @@
+[
+  {
+    "id": "fixture_01_zillow_standard",
+    "platform": "zillow",
+    "url_origen": "https://www.zillow.com/homedetails/1420-maple-ave/1001_zpid/",
+    "markdown": "# 1420 Maple Ave, Cleveland, OH 44102\n\nPrice: $115,000\nCounty: Cuyahoga County\nEst. Rent: $1,450/mo\nCoordinates: 41.4822, -81.7341\n\n![Front](https://photos.zillowstatic.com/fp/1001-front.jpg)\n![Kitchen](https://photos.zillowstatic.com/fp/1001-kitchen.jpg)\n\n## Description\nBrick colonial 3 bed 1 bath with updated roof and strong Section 8 rental history.",
+    "expected": {
+      "precio_usd": 115000.0,
+      "condado": "Cuyahoga",
+      "ingreso_anual_estimado": 17400.0,
+      "min_images": 2,
+      "has_coords": true
+    }
+  },
+  {
+    "id": "fixture_02_realtor_turnkey",
+    "platform": "realtor",
+    "url_origen": "https://www.realtor.com/realestateandhomes-detail/8842-oakwood-dr_M9911",
+    "markdown": "Address: 8842 Oakwood Dr, Detroit, MI 48219\nList Price: $92,500\nCounty: Wayne County\nMonthly Rent: $1,250/mo\n![Exterior](https://ap.rdcpix.com/8842-exterior.jpg)\n\nDescription:\nTurnkey brick bungalow with detached 2-car garage and recently replaced furnace.",
+    "expected": {
+      "precio_usd": 92500.0,
+      "condado": "Wayne",
+      "ingreso_anual_estimado": 15000.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_03_redfin_shorthand_k",
+    "platform": "redfin",
+    "url_origen": "https://www.redfin.com/OH/Akron/312-Cedar-St-44304/home/3003",
+    "markdown": "## 312 Cedar St, Akron, OH 44304\n**$128K**\nLocated in Summit County.\nRent Zestimate: $1,350/mo\nLat: 41.0731\nLng: -81.5190\n![Main](https://ssl.cdn-redfin.com/photo/3003-main.webp)\n\nOverview:\nWell-kept duplex near University of Akron with separate gas and electric meters.",
+    "expected": {
+      "precio_usd": 128000.0,
+      "condado": "Summit",
+      "ingreso_anual_estimado": 16200.0,
+      "min_images": 1,
+      "has_coords": true
+    }
+  },
+  {
+    "id": "fixture_04_trulia_no_rent",
+    "platform": "trulia",
+    "url_origen": "https://www.trulia.com/home/455-pine-rd-memphis-tn-38109-4004",
+    "markdown": "# 455 Pine Rd, Memphis, TN 38109\nAsking Price: $84,900\nCounty: Shelby\n![Front](https://photos.trulia.com/4004-front.jpeg)\n\nAbout this home:\nCozy single-story ranch in South Memphis featuring hardwood floors and fenced backyard.",
+    "expected": {
+      "precio_usd": 84900.0,
+      "condado": "Shelby",
+      "ingreso_anual_estimado": 0.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_05_loopnet_commercial_million",
+    "platform": "loopnet",
+    "url_origen": "https://www.loopnet.com/Listing/5005-commerce-blvd/5005/",
+    "markdown": "Property Address: 5005 Commerce Blvd, Tampa, FL 33614\nSale Price: $1.25M\nCounty: Hillsborough County\nAnnual Income: $132,000/yr\nCoordinates: 28.0045, -82.5012\n![Building](https://images1.loopnet.com/i2/5005-bldg.jpg)\n\nDescription:\nFour-unit light industrial retail strip fully leased with NNN tenants.",
+    "expected": {
+      "precio_usd": 1250000.0,
+      "condado": "Hillsborough",
+      "ingreso_anual_estimado": 132000.0,
+      "min_images": 1,
+      "has_coords": true
+    }
+  },
+  {
+    "id": "fixture_06_craigslist_fsbo",
+    "platform": "craigslist",
+    "url_origen": "https://cleveland.craigslist.org/reo/d/cleveland-719-euclid/6006.html",
+    "markdown": "Listing ID: cl-6006\nLocation: 719 Euclid Ave, Cleveland, OH 44114\nPrice: $79,000\nCounty: Cuyahoga\nMonthly Rent: $1,100/mo\nhttps://images.craigslist.org/00a0a_6006_600x450.jpg\n\nFor sale by owner. Solid frame home needing light cosmetic paint and flooring.",
+    "expected": {
+      "precio_usd": 79000.0,
+      "condado": "Cuyahoga",
+      "ingreso_anual_estimado": 13200.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_07_century21_spanish_labels",
+    "platform": "century21",
+    "url_origen": "https://www.century21.com/property/2210-coral-way-miami-fl-7007",
+    "markdown": "Ubicación: 2210 Coral Way, Miami, FL 33145\nPrecio: $148,500\nCondado: Miami-Dade\nIngreso Anual: $21,600\nLatitud: 25.7501\nLongitud: -80.2315\n![Sala](https://cdn.century21.com/7007-sala.jpg)\n\nDescripción:\nApartamento remodelado cerca de Brickell con bajo mantenimiento y alta demanda.",
+    "expected": {
+      "precio_usd": 148500.0,
+      "condado": "Miami-Dade",
+      "ingreso_anual_estimado": 21600.0,
+      "min_images": 1,
+      "has_coords": true
+    }
+  },
+  {
+    "id": "fixture_08_coldwell_inline_county",
+    "platform": "coldwell",
+    "url_origen": "https://www.coldwellbankerhomes.com/fl/jacksonville/1908-river-ln/pid_8008/",
+    "markdown": "# 1908 River Ln, Jacksonville, FL 32207\n### $139,900\nSituated in Duval County with quick access to downtown.\nEstimated Rent: $1,600/mo\n![Porch](https://cbhomes.cdn.net/8008-porch.jpg)\n![Logo](https://cbhomes.cdn.net/assets/logo.png)\n\nCharming bungalow with screened porch and recently serviced HVAC.",
+    "expected": {
+      "precio_usd": 139900.0,
+      "condado": "Duval",
+      "ingreso_anual_estimado": 19200.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_09_remax_with_hoa_distractor",
+    "platform": "remax",
+    "url_origen": "https://www.remax.com/oh/columbus/home-details/610-high-st/9009",
+    "markdown": "Address: 610 High St, Columbus, OH 43215\nHOA: $195/mo\n$142,000\nCounty: Franklin County\nEst. Rent: $1,550/mo\n![Unit](https://media.remax.com/9009-unit.jpg)\n\nModern townhome close to downtown employers with steady occupancy.",
+    "expected": {
+      "precio_usd": 142000.0,
+      "condado": "Franklin",
+      "ingreso_anual_estimado": 18600.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_10_zillow_decimal_k",
+    "platform": "zillow",
+    "url_origen": "https://www.zillow.com/homedetails/1010-elm-ct/1010_zpid/",
+    "markdown": "# 1010 Elm Ct, Indianapolis, IN 46201\nPrice: $105.5K\nCounty: Marion\nAnnual Rent: $15,600\n![House](https://photos.zillowstatic.com/1010-house.jpg)\n\nDescription:\nThree bedroom east-side rental with vinyl siding and long-term tenant in place.",
+    "expected": {
+      "precio_usd": 105500.0,
+      "condado": "Marion",
+      "ingreso_anual_estimado": 15600.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_11_realtor_markdown_link_source",
+    "platform": "realtor",
+    "url_origen": null,
+    "markdown": "[View on Realtor](https://www.realtor.com/realestateandhomes-detail/1111-birch-way_M1111)\n# 1111 Birch Way, Birmingham, AL 35205\nPrice: $119,000\nCounty: Jefferson County\nMonthly Rent: $1,300/mo\n\nDescription:\nBrick home on quiet street with newly finished basement and updated plumbing.",
+    "expected": {
+      "precio_usd": 119000.0,
+      "condado": "Jefferson",
+      "ingreso_anual_estimado": 15600.0,
+      "min_images": 0,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_12_redfin_multiple_images_dedup",
+    "platform": "redfin",
+    "url_origen": "https://www.redfin.com/PA/Pittsburgh/1212-Liberty-Ave-15222/home/1212",
+    "markdown": "Address: 1212 Liberty Ave, Pittsburgh, PA 15222\nList Price: $134,500\nCounty: Allegheny\nEst. Rent: $1,500/mo\n![Front](https://ssl.cdn-redfin.com/1212-a.jpg)\n![Front Dup](https://ssl.cdn-redfin.com/1212-a.jpg)\n![Back](https://ssl.cdn-redfin.com/1212-b.png)\n![Icon](https://ssl.cdn-redfin.com/favicon.png)\n\nDescription:\nHistoric rowhouse renovated in 2024 with modern kitchen appliances.",
+    "expected": {
+      "precio_usd": 134500.0,
+      "condado": "Allegheny",
+      "ingreso_anual_estimado": 18000.0,
+      "min_images": 2,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_13_trulia_coords_lat_lon",
+    "platform": "trulia",
+    "url_origen": "https://www.trulia.com/home/1313-sun-blvd-orlando-fl-32801-1313",
+    "markdown": "Address: 1313 Sun Blvd, Orlando, FL 32801\nPrice: $149,000\nCounty: Orange County\nLatitude: 28.5383\nLongitude: -81.3792\nRent: $1,650/mo\n![Pool](https://photos.trulia.com/1313-pool.jpg)\n\nDescription:\nCorner-lot condo near downtown Orlando with community pool and reserved parking.",
+    "expected": {
+      "precio_usd": 149000.0,
+      "condado": "Orange",
+      "ingreso_anual_estimado": 19800.0,
+      "min_images": 1,
+      "has_coords": true
+    }
+  },
+  {
+    "id": "fixture_14_loopnet_small_multifamily",
+    "platform": "loopnet",
+    "url_origen": "https://www.loopnet.com/Listing/1414-main-st/1414/",
+    "markdown": "# 1414 Main St, Toledo, OH 43604\nAsking Price: $138,000\nCounty: Lucas County\nGross Annual Income: $24,000\n![Duplex](https://images1.loopnet.com/1414-duplex.jpg)\n\nDescription:\nTwo-family brick investment property with long-standing commercial corridor visibility.",
+    "expected": {
+      "precio_usd": 138000.0,
+      "condado": "Lucas",
+      "ingreso_anual_estimado": 24000.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_15_craigslist_minimal_valid",
+    "platform": "craigslist",
+    "url_origen": "https://tampa.craigslist.org/reo/1515.html",
+    "markdown": "1515 Bayshore Dr, St Petersburg, FL 33701\nPrice: $122,000\nCounty: Pinellas\n\nCash buyer special near Bayshore corridor, solid concrete block structure.",
+    "expected": {
+      "precio_usd": 122000.0,
+      "condado": "Pinellas",
+      "ingreso_anual_estimado": 0.0,
+      "min_images": 0,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_16_century21_inline_rent",
+    "platform": "century21",
+    "url_origen": "https://www.century21.com/property/1616-peachtree-rd-atlanta-ga-1616",
+    "markdown": "Property Address: 1616 Peachtree Rd, Atlanta, GA 30309\nPrice: $146,000\nCounty: Fulton County\nNotes: Estimated Rent $1,700/mo in surrounding blocks.\n![Living](https://cdn.century21.com/1616-living.jpg)\n\nDescription:\nMidtown Atlanta studio condo with concierge desk and low HOA dues.",
+    "expected": {
+      "precio_usd": 146000.0,
+      "condado": "Fulton",
+      "ingreso_anual_estimado": 20400.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_17_coldwell_cents_price",
+    "platform": "coldwell",
+    "url_origen": "https://www.coldwellbankerhomes.com/tx/dallas/1717-pecan-trl/1717",
+    "markdown": "# 1717 Pecan Trl, Dallas, TX 75216\nList Price: $131,250.50\nCounty: Dallas County\nEst. Annual Rent: $18,900/yr\nCoordinates: 32.7157, -96.7970\n![Exterior](https://cbhomes.cdn.net/1717-ext.webp)\n\nDescription:\nUpdated 3 bed 2 bath ranch with new composition shingle roof.",
+    "expected": {
+      "precio_usd": 131250.5,
+      "condado": "Dallas",
+      "ingreso_anual_estimado": 18900.0,
+      "min_images": 1,
+      "has_coords": true
+    }
+  },
+  {
+    "id": "fixture_18_remax_bold_markdown",
+    "platform": "remax",
+    "url_origen": "https://www.remax.com/nc/charlotte/1818-oak-ter/1818",
+    "markdown": "- **Address:** 1818 Oak Ter, Charlotte, NC 28205\n- **Price:** **$144,000**\n- **County:** **Mecklenburg County**\n- **Monthly Rent:** $1,525/mo\n![Kitchen](https://media.remax.com/1818-kitchen.jpg)\n\nDescription:\nRenovated duplex unit close to Plaza Midwood with private patio.",
+    "expected": {
+      "precio_usd": 144000.0,
+      "condado": "Mecklenburg",
+      "ingreso_anual_estimado": 18300.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_19_zillow_hyphenated_county",
+    "platform": "zillow",
+    "url_origen": "https://www.zillow.com/homedetails/1919-biscayne-blvd/1919_zpid/",
+    "markdown": "# 1919 Biscayne Blvd, Miami, FL 33132\nPrice: $147,500\nLocated in Miami-Dade County.\nRenta Mensual: $1,800/mo\n![View](https://photos.zillowstatic.com/1919-view.jpg)\n\nDescription:\nHigh-floor bay view studio with impact windows and tenant lease until next year.",
+    "expected": {
+      "precio_usd": 147500.0,
+      "condado": "Miami-Dade",
+      "ingreso_anual_estimado": 21600.0,
+      "min_images": 1,
+      "has_coords": false
+    }
+  },
+  {
+    "id": "fixture_20_realtor_full_featured",
+    "platform": "realtor",
+    "url_origen": "https://www.realtor.com/realestateandhomes-detail/2020-cypress-pkwy_M2020",
+    "markdown": "# 2020 Cypress Pkwy, Kissimmee, FL 34759\nSale Price: $136,000\nCounty: Osceola County\nEst. Rent: $1,575/mo\nCoordenadas: 28.1492, -81.4648\n![Front](https://ap.rdcpix.com/2020-front.jpg)\n![Backyard](https://ap.rdcpix.com/2020-backyard.jpg)\n\n## Overview\nConcrete block 3/2 home in Poinciana with screened lanai and ceramic tile throughout.",
+    "expected": {
+      "precio_usd": 136000.0,
+      "condado": "Osceola",
+      "ingreso_anual_estimado": 18900.0,
+      "min_images": 2,
+      "has_coords": true
+    }
+  }
+]

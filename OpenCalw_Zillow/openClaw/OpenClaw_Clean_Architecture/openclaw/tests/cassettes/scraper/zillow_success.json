@@ -1,0 +1,17 @@
+{
+  "name": "zillow_success",
+  "platform": "zillow",
+  "query": "Cleveland OH",
+  "behavior": "response",
+  "response": {
+    "success": true,
+    "data": {
+      "markdown": "# 1420 Maple Ave, Cleveland, OH 44102\n\nPrice: $115,000\nCounty: Cuyahoga County\nEst. Rent: $1,450/mo\nURL: https://www.zillow.com/homedetails/1420-maple-ave/1001_zpid/\nCoordinates: 41.4822, -81.7341\n\n![Front view](https://photos.zillowstatic.com/fp/1001-front.jpg)\n\n## Description\nSingle-family 3 bed 1 bath brick colonial with updated electrical panel and strong rental demand in Cuyahoga County.",
+      "metadata": {
+        "statusCode": 200,
+        "title": "Cleveland OH Real Estate - Zillow",
+        "sourceURL": "https://www.zillow.com/homes/Cleveland-OH_rb/"
+      }
+    }
+  }
+}

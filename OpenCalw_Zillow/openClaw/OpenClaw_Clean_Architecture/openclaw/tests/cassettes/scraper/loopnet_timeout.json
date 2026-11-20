@@ -1,0 +1,8 @@
+{
+  "name": "loopnet_timeout",
+  "platform": "loopnet",
+  "query": "Dallas TX",
+  "behavior": "timeout",
+  "sleep_seconds": 0.25,
+  "message": "Simulated upstream timeout from Firecrawl"
+}

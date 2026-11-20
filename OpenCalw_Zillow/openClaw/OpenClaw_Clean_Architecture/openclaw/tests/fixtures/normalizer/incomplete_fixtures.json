@@ -1,0 +1,51 @@
+[
+  {
+    "id": "incomplete_01_missing_price",
+    "platform": "zillow",
+    "url_origen": "https://www.zillow.com/homedetails/bad-1",
+    "markdown": "# 100 Missing Price St, Cleveland, OH 44102\nCounty: Cuyahoga\nDescription:\nNice property without any listed price.",
+    "expected_reason": "missing_or_invalid_price"
+  },
+  {
+    "id": "incomplete_02_tbd_price",
+    "platform": "realtor",
+    "url_origen": "https://www.realtor.com/bad-2",
+    "markdown": "Address: 200 Auction Ave, Detroit, MI 48219\nPrice: Contact for price (TBD)\nCounty: Wayne\nDescription:\nOff-market auction listing with undisclosed asking price.",
+    "expected_reason": "missing_or_invalid_price"
+  },
+  {
+    "id": "incomplete_03_zero_price",
+    "platform": "redfin",
+    "url_origen": "https://www.redfin.com/bad-3",
+    "markdown": "Address: 300 Zero Rd, Miami, FL 33101\nPrice: $0\nCounty: Miami-Dade\nDescription:\nInvalid listing showing zero dollar price.",
+    "expected_reason": "missing_or_invalid_price"
+  },
+  {
+    "id": "incomplete_04_missing_location",
+    "platform": "trulia",
+    "url_origen": "https://www.trulia.com/bad-4",
+    "markdown": "Address: Address not disclosed\nPrice: $125,000\nCounty: Shelby\nDescription:\nConfidential listing hiding the street address.",
+    "expected_reason": "missing_location"
+  },
+  {
+    "id": "incomplete_05_missing_county",
+    "platform": "loopnet",
+    "url_origen": "https://www.loopnet.com/bad-5",
+    "markdown": "# 500 No County Blvd, Orlando, FL 32801\nPrice: $140,000\nDescription:\nListing missing county metadata required for tax and legal audit.",
+    "expected_reason": "missing_county"
+  },
+  {
+    "id": "incomplete_06_missing_source_id",
+    "platform": "craigslist",
+    "url_origen": null,
+    "markdown": "# 600 Orphan Ln, Tampa, FL 33602\nPrice: $110,000\nCounty: Hillsborough\nDescription:\nOrphan listing with no URL or platform source identifier.",
+    "expected_reason": "missing_source_id"
+  },
+  {
+    "id": "incomplete_07_empty_markdown",
+    "platform": "remax",
+    "url_origen": "https://www.remax.com/bad-7",
+    "markdown": "   \n  ",
+    "expected_reason": "empty_markdown"
+  }
+]

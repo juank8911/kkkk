@@ -1,0 +1,17 @@
+{
+  "name": "redfin_blocked_403",
+  "platform": "redfin",
+  "query": "Miami FL",
+  "behavior": "response",
+  "response": {
+    "success": false,
+    "data": {
+      "markdown": "Access Denied - Cloudflare security challenge triggered.",
+      "metadata": {
+        "statusCode": 403,
+        "title": "Access Denied",
+        "blocked": true
+      }
+    }
+  }
+}
