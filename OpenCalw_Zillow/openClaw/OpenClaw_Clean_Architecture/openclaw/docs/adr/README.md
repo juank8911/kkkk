@@ -9,6 +9,7 @@ Este directorio contiene las decisiones arquitectónicas fundacionales congelada
 | [ADR-03](./ADR-03-persistencia-postgresql.md) | Persistencia principal en PostgreSQL 16 con SQLAlchemy 2 y Alembic | Aprobado | 2026-11-20 | Dev B (autor), Dev A (revisor) |
 | [ADR-04](./ADR-04-autenticacion-api-key.md) | Autenticación de ingesta mediante API key con hash en `X-OpenClaw-Tactical-Key` | Aprobado | 2026-11-20 | Dev B (autor), Dev A (revisor) |
 | [ADR-05](./ADR-05-alcance-buy-sandbox.md) | Alcance seguro del webhook `/buy` (`BUY_MODE=disabled` por defecto y modo `sandbox`) | Aprobado | 2026-11-20 | Dev B (autor), Dev A (revisor) |
+| [ADR-06](./ADR-06-reconciliacion-fases-105-111.md) | Reconciliación de numeración Fases 105–109 y 110–111 / 116–117 | Propuesto / Dev 2 | 2026-11-20 | Dev B (autor) |
 
 ## Política de cambios
 
