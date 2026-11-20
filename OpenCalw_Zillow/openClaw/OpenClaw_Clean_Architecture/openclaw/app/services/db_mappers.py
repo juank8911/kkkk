@@ -42,7 +42,12 @@ def map_normalized_property_to_orm(
         plataforma=plataforma.strip().lower(),
         url_origen=propiedad.id_plataforma_origen,
         ubicacion=propiedad.ubicacion,
+        direccion_normalizada=propiedad.direccion_normalizada,
+        ciudad=propiedad.ciudad,
+        codigo_postal=propiedad.codigo_postal,
         condado=propiedad.condado,
+        fuente_ubicacion=propiedad.fuente_ubicacion,
+        confianza_ubicacion=propiedad.confianza_ubicacion,
         precio_usd=propiedad.precio_usd,
         ingreso_anual_estimado=propiedad.ingreso_anual_estimado,
         imagenes=list(propiedad.imagenes),
@@ -50,6 +55,7 @@ def map_normalized_property_to_orm(
         longitud=propiedad.longitud,
         descripcion_cruda=propiedad.descripcion_cruda,
         huella_dedupe=dedupe,
+        created_at=propiedad.fecha_consulta,
     )
 
 

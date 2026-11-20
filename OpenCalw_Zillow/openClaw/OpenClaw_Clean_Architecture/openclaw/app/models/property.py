@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -20,6 +22,20 @@ class DatosPropiedadNormalizados(BaseModel):
         min_length=5,
         description="Dirección completa de la propiedad",
     )
+    direccion_normalizada: str | None = Field(
+        default=None,
+        min_length=5,
+        description="Dirección normalizada por geocodificación, si está disponible",
+    )
+    ciudad: str | None = Field(default=None, min_length=2, max_length=120)
+    codigo_postal: str | None = Field(
+        default=None,
+        pattern=r"^\d{5}(?:-\d{4})?$",
+        description="Código postal de la ubicación validada",
+    )
+    fuente_ubicacion: str = Field(default="anuncio", min_length=2, max_length=80)
+    confianza_ubicacion: str = Field(default="anuncio", min_length=2, max_length=30)
+    fecha_consulta: datetime = Field(default_factory=lambda: datetime.now(UTC))
     precio_usd: float = Field(
         ...,
         gt=0,

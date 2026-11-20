@@ -70,12 +70,20 @@ _INLINE_MONTHLY_RENT_RE = re.compile(
 _LABEL_ADDRESS_RE = re.compile(
     r"(?im)^[\s\-*>#]*(?:property\s+address|address|ubicaci[oó]n|location)\s*:\s*(.+)$"
 )
+_LABEL_CITY_RE = re.compile(r"(?im)^[\s\-*>#]*(?:city|ciudad)\s*:\s*(.+)$")
+_LABEL_ZIP_RE = re.compile(
+    r"(?im)^[\s\-*>#]*(?:zip(?:\s+code)?|postal\s+code|c[oó]digo\s+postal)\s*:\s*(.+)$"
+)
 _HEADING_RE = re.compile(r"(?m)^#{1,3}\s+(.+)$")
 _US_ADDRESS_RE = re.compile(
     r"\b(\d{1,6}\s+[A-Za-z0-9.'\- ]{2,60}?"
     r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|"
     r"Way|Pl|Place|Cir|Circle|Pkwy|Parkway|Ter|Terrace|Hwy|Highway|Trl|Trail|Loop)\b"
     r"[^,\n]{0,25},\s*[A-Za-z .'-]{2,40},\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?)"
+)
+_US_ZIP_RE = re.compile(r"\b(\d{5}(?:-\d{4})?)\b")
+_US_CITY_RE = re.compile(
+    r",\s*([A-Za-z][A-Za-z .'-]{1,60}?),\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?\s*$"
 )
 
 _LABEL_COUNTY_RE = re.compile(r"(?im)^[\s\-*>#]*(?:county|condado)\s*:\s*(.+)$")
@@ -230,6 +238,8 @@ class MarkdownPropertyNormalizer:
         ubicacion = _extract_address(block)
         if not ubicacion:
             reasons.append("missing_location")
+        ciudad = _extract_city(block, ubicacion)
+        codigo_postal = _extract_zip_code(block, ubicacion)
 
         precio_usd = _extract_price_usd(block)
         if precio_usd is None or precio_usd <= 0:
@@ -259,6 +269,8 @@ class MarkdownPropertyNormalizer:
             propiedad = DatosPropiedadNormalizados(
                 id_plataforma_origen=source_id,
                 ubicacion=ubicacion,
+                ciudad=ciudad,
+                codigo_postal=codigo_postal,
                 precio_usd=precio_usd,
                 ingreso_anual_estimado=ingreso_anual,
                 imagenes=imagenes,
@@ -387,6 +399,28 @@ def _extract_county(block: str) -> str | None:
         candidate = inline_match.group(1).strip()
         if not _is_placeholder(candidate) and len(candidate) >= 2:
             return candidate
+    return None
+
+
+def _extract_zip_code(block: str, ubicacion: str | None) -> str | None:
+    """Extrae ZIP explícito o incluido en la dirección del anuncio."""
+    label_match = _LABEL_ZIP_RE.search(block)
+    search_text = label_match.group(1) if label_match else (ubicacion or "")
+    match = _US_ZIP_RE.search(search_text)
+    return match.group(1) if match else None
+
+
+def _extract_city(block: str, ubicacion: str | None) -> str | None:
+    """Extrae ciudad explícita o la ciudad del formato ``dirección, ciudad, ST ZIP``."""
+    label_match = _LABEL_CITY_RE.search(block)
+    if label_match:
+        candidate = _clean_md_value(label_match.group(1))
+        if not _is_placeholder(candidate) and len(candidate) >= 2:
+            return candidate
+    if ubicacion:
+        match = _US_CITY_RE.search(ubicacion.strip())
+        if match:
+            return match.group(1).strip()
     return None
 
 
