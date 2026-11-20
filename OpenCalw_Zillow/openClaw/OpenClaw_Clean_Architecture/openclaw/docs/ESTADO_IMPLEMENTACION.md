@@ -50,7 +50,24 @@ Flujo acordado:
 | S2-04 | Semilla del catálogo de plataformas | Hecho |
 | S2-03 | Repositorios y unidad de trabajo | Pendiente |
 | S2-05 | Webhook de Telegram con `secret_token` y dedupe | Pendiente |
-| S2-06 a S2-09 | Bloque de Dev 2 | En curso por Dev 2 |
+| S2-06 a S2-09 | Bloque de Dev 2 (normalizador, `/buy` sandbox, cliente UAO, suite seguridad) | Hecho en `dev2` |
+
+## Sprints 3 a 6 — Bloque Dev 2 (completado en `dev2`)
+
+| Sprint | ID | Tarea | Estado |
+|---|---|---|---|
+| S3 | S3-05 | Enriquecimiento (precio, superficie, año, HOA) con 20 anuncios | Hecho en `dev2` |
+| S3 | S3-07 | Deduplicación por dirección normalizada y similitud | Hecho en `dev2` |
+| S3 | S3-08 | Pruebas de resiliencia del worker (pérdida, reintento, DLQ, duplicados) | Hecho en `dev2` |
+| S4 | S4-04 | Nodo financiero parametrizado desde configuración (`OPENCLAW_FIN_*`) | Hecho en `dev2` |
+| S4 | S4-05 | Nodo de visión multimodal con `ValuationPort` y degradación a `no_disponible` | Hecho en `dev2` |
+| S4 | S4-06 | Nodo de auditoría legal asistida (liens, back taxes, revisión humana obligatoria) | Hecho en `dev2` |
+| S4 | S4-07 | Nodo de alerta Telegram con plantilla, dedupe y enlace a ficha | Hecho en `dev2` |
+| S5 | S5-04 | Panel mínimo de jobs y telemetría (`app/frontend/panel.html`) | Hecho en `dev2` |
+| S5 | S5-05 | Suite E2E con Firecrawl simulado + prueba real nocturna opcional | Hecho en `dev2` |
+| S5 | S5-06 | Prueba de carga controlada (100 jobs sin errores no controlados) | Hecho en `dev2` |
+| S6 | S6-02 | Revisión de seguridad OWASP API Top 10 (`docs/security/OWASP_API_TOP10_REVIEW.md`) | Hecho en `dev2` |
+| S6 | S6-05 | Backlog priorizado y estimado de fases 95–104 (`docs/BACKLOG_FASES_95_104.md`) | Hecho en `dev2` |
 
 ### S2-01 · Autenticación
 
