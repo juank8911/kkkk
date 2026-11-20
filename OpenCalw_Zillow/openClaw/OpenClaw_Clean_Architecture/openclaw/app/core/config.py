@@ -50,6 +50,9 @@ class Settings(BaseSettings):
 
     TG_TOKEN: str = ""
     TG_CHAT_ID: str = ""
+    TG_WEBHOOK_SECRET: str = ""
+    TG_ALLOWED_CHAT_IDS: str = ""
+    TG_DEDUPE_TTL_SEGUNDOS: int = Field(default=3600, ge=60, le=86400)
 
     UAO_SCALPING_API: str = "http://uao-scalping-core:8001/v1/liquidity"
     BUY_MODE: ModoCompra = "disabled"
@@ -82,6 +85,20 @@ class Settings(BaseSettings):
         if not en_claro:
             return ""
         return hashlib.sha256(en_claro.encode("utf-8")).hexdigest()
+
+    @property
+    def chats_autorizados(self) -> frozenset[int]:
+        """Allowlist de chats de Telegram; vacia significa 'sin restriccion'."""
+        ids: set[int] = set()
+        for crudo in self.TG_ALLOWED_CHAT_IDS.replace(";", ",").split(","):
+            valor = crudo.strip()
+            if not valor:
+                continue
+            try:
+                ids.add(int(valor))
+            except ValueError:
+                continue
+        return frozenset(ids)
 
     @property
     def secretos_obligatorios(self) -> tuple[str, ...]:
