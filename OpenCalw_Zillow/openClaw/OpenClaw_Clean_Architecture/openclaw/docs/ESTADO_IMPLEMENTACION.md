@@ -226,9 +226,19 @@ análisis estático y el CI queda como puerta de calidad.
 | `dev1` → `main` | Fusión `--no-ff` sin conflictos |
 | `pytest` | No ejecutable en este equipo (intérprete de Python bloqueado) |
 
+## Fase 95 — Seguimiento post-oferta (Dev 1)
+
+- Tabla `ofertas` y tabla append-only `oferta_eventos`, con migración
+  `0003_seguimiento_ofertas.py` y trazabilidad por propiedad.
+- Pipeline explícito `propuesta → contraoferta → aceptada → cerrada`, además de
+  rechazo y cancelación; los saltos inválidos responden con `409`.
+- API protegida por API key: crear, listar y cambiar el estado de una oferta en
+  `/v1/openclaw/propiedades/{propiedad_id}/ofertas`.
+- No se envían ofertas automáticamente: el actor humano y sus notas quedan
+  registrados en cada transición.
+- Pruebas: `tests/test_offers.py` cubre el flujo válido y los saltos ilegales.
+
 ## Siguiente corte
-1. Sprint 5: panel de jobs con estado por plataforma y notificaciones de Telegram
-   sobre las decisiones persistidas.
-2. Conectar `evaluar_y_registrar_decision()` al worker justo después de
-   `procesar_lote_extraccion_con_uow`, propiedad por propiedad.
-3. Reintentar `git push kkk main:main` cuando haya red.
+1. Fase 96: estratega macro con parámetros versionados y scheduler seguro.
+2. Fase 97: auditoría legal ampliada con fuentes de registros públicos.
+3. Fase 100: matriz de despliegue productivo extendida.

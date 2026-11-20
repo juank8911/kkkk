@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.errors import registrar_manejadores
-from app.api.routes import execution, health, ingestion
+from app.api.routes import execution, health, ingestion, offers  # pyright: ignore[reportAttributeAccessIssue]
 from app.core.config import settings
 from app.core.logging import configure_logging
 
@@ -46,3 +46,4 @@ registrar_manejadores(app)
 app.include_router(health.router)
 app.include_router(ingestion.router)
 app.include_router(execution.router)
+app.include_router(offers.router)

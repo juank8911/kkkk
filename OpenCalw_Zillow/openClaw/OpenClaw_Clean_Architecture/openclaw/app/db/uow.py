@@ -25,6 +25,7 @@ from app.db.repositories import (
     RepositorioJobs,
     RepositorioPropiedades,
 )
+from app.db.offers_repository import RepositorioOfertas
 
 logger = logging.getLogger("OpenClaw.UoW")
 
@@ -41,6 +42,7 @@ class UnidadDeTrabajo:
         self.propiedades = RepositorioPropiedades(sesion)
         self.decisiones = RepositorioDecisiones(sesion)
         self.eventos = RepositorioEventos(sesion)
+        self.ofertas = RepositorioOfertas(sesion)
 
     async def confirmar(self) -> None:
         await self.sesion.commit()
