@@ -1,4 +1,4 @@
-﻿"""Worker asincrono de ingestion (S3-01, S3-02, S3-03).
+"""Worker asincrono de ingestion (S3-01, S3-02, S3-03).
 
 Ciclo de vida de un mensaje del stream:
 
@@ -29,6 +29,7 @@ from app.core.logging import configure_logging, job_context
 from app.core.redis_client import redis_client
 from app.models.contracts import JobStatus
 from app.services import idempotency
+from app.services.domain_semaphore import semaforos
 from app.services.platforms import InvalidPlatformError, get_platform_spec
 from app.services.scraper import extraer_con_reintentos
 from app.workers.state_machine import TransicionInvalida, aplicar_transicion
@@ -90,7 +91,8 @@ async def _extraer_plataforma(clave: str, query: str, job_id: UUID | None) -> di
     if job_id is not None and not await idempotency.reclamar(job_id, clave):
         return {"plataforma": clave, "status": "omitido_idempotente"}
 
-    resultado = await extraer_con_reintentos(f"https://{spec.domain}", query)
+    async with semaforos.turno(spec.domain):
+        resultado = await extraer_con_reintentos(f"https://{spec.domain}", query)
     return {"plataforma": clave, **resultado}
 
 
