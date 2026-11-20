@@ -43,7 +43,7 @@ try:  # pragma: no cover - depende del entorno
     from langgraph.graph import END, StateGraph
 
     LANGGRAPH_DISPONIBLE = True
-except ImportError:  # pragma: no cover
+except (ImportError, TypeError):  # pragma: no cover - incompatibilidad pydantic.v1/Py3.12+
     MemorySaver = None  # type: ignore[assignment]
     END = "__end__"  # type: ignore[assignment]
     StateGraph = None  # type: ignore[assignment]
