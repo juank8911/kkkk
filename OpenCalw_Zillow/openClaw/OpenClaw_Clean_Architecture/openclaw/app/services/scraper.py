@@ -69,7 +69,9 @@ async def extraer_con_reintentos(
     """Wrapper compatible con el worker delegando en FirecrawlAdapter."""
     resolved_platform = _resolve_platform_key(platform)
     active_scraper = (
-        scraper if scraper is not None else build_default_scraper(max_attempts=max_intentos)
+        scraper
+        if scraper is not None
+        else build_default_scraper(max_attempts=max_intentos)
     )
     result = await active_scraper.scrape(platform=resolved_platform, query=query)
     if result.ok:

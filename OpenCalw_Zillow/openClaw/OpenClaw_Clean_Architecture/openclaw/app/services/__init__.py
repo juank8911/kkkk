@@ -1,5 +1,36 @@
-"""Servicios de dominio de OpenClaw (catálogo, rate limiter, scraper y normalizador)."""
+"""Servicios de dominio de OpenClaw (catálogo, rate limiter, scraper, normalizador, enriquecimiento, deduplicador y buy sandbox)."""
 
+from app.services.buy_service import (
+    DEFAULT_ALLOWED_DESTINATIONS,
+    BuyAuditStorePort,
+    BuyConfirmationError,
+    BuyDestinationNotAllowedError,
+    BuyDisabledError,
+    BuyIdempotencyStorePort,
+    BuyLimitExceededError,
+    BuyServiceError,
+    BuySimulationService,
+    IdempotencyConflictError,
+    InMemoryBuyAuditStore,
+    InMemoryBuyIdempotencyStore,
+    RedisBuyIdempotencyStore,
+    parse_telegram_buy_command,
+)
+from app.services.deduplicator import (
+    DeduplicatedProperty,
+    calcular_similitud_direcciones,
+    deduplicar_propiedades,
+    generar_clave_deduplicacion,
+    normalizar_direccion,
+    son_misma_propiedad,
+)
+from app.services.enrichment import (
+    PropertyEnrichment,
+    enriquecer_propiedad_desde_markdown,
+    extraer_anio_construccion,
+    extraer_hoa_mensual_usd,
+    extraer_superficie_sqft,
+)
 from app.services.normalizer import (
     MarkdownPropertyNormalizer,
     NormalizationBatch,
@@ -28,6 +59,19 @@ from app.services.rate_limiter import (
 )
 
 __all__ = [
+    "BuyAuditStorePort",
+    "BuyConfirmationError",
+    "BuyDestinationNotAllowedError",
+    "BuyDisabledError",
+    "BuyIdempotencyStorePort",
+    "BuyLimitExceededError",
+    "BuyServiceError",
+    "BuySimulationService",
+    "DEFAULT_ALLOWED_DESTINATIONS",
+    "DeduplicatedProperty",
+    "IdempotencyConflictError",
+    "InMemoryBuyAuditStore",
+    "InMemoryBuyIdempotencyStore",
     "InvalidPlatformError",
     "InvalidQueryError",
     "LIMITES_WAF",
@@ -36,16 +80,28 @@ __all__ = [
     "NormalizationError",
     "PLATFORM_CATALOG",
     "PlatformSpec",
+    "PropertyEnrichment",
     "RateLimitDecision",
+    "RedisBuyIdempotencyStore",
     "RejectedListing",
     "SlidingWindowRateLimiter",
     "VALID_PLATFORM_KEYS",
     "adquirir_permiso_extraccion",
     "build_platform_url",
+    "calcular_similitud_direcciones",
+    "deduplicar_propiedades",
+    "enriquecer_propiedad_desde_markdown",
+    "extraer_anio_construccion",
+    "extraer_hoa_mensual_usd",
+    "extraer_superficie_sqft",
+    "generar_clave_deduplicacion",
     "get_default_domain_limits",
     "get_platform_spec",
+    "normalizar_direccion",
     "normalizar_markdown_propiedades",
     "normalizar_propiedad_unica",
+    "parse_telegram_buy_command",
     "sanitize_query_slug",
+    "son_misma_propiedad",
     "validate_platforms",
 ]
