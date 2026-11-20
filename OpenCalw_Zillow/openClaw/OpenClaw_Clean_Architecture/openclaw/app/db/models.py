@@ -94,6 +94,62 @@ class Propiedad(Base):
     )
 
 
+class Oferta(Base):
+    """Oferta comercial con pipeline de contraoferta y cierre (Fase 95)."""
+
+    __tablename__ = "ofertas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    propiedad_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("propiedades.id", ondelete="CASCADE"), nullable=False
+    )
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="propuesta", index=True)
+    importe_usd: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    importe_contraoferta_usd: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    notas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actor_ultima_actualizacion: Mapped[str] = mapped_column(String(120), nullable=False)
+    creada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    actualizada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    cerrada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    propiedad: Mapped[Propiedad] = relationship()
+    eventos: Mapped[list["OfertaEvento"]] = relationship(back_populates="oferta")
+
+    __table_args__ = (
+        CheckConstraint(
+            "estado IN ('propuesta','contraoferta','aceptada','rechazada','cerrada','cancelada')",
+            name="ck_ofertas_estado_valido",
+        ),
+        CheckConstraint("importe_usd > 0", name="ck_ofertas_importe_positivo"),
+    )
+
+
+class OfertaEvento(Base):
+    """Historial append-only de transiciones de una oferta."""
+
+    __tablename__ = "oferta_eventos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    oferta_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("ofertas.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    estado_anterior: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    estado_nuevo: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor: Mapped[str] = mapped_column(String(120), nullable=False)
+    notas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ocurrido_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    oferta: Mapped[Oferta] = relationship(back_populates="eventos")
+
+
 class Decision(Base):
     """Resultado del grafo de due diligence para una propiedad."""
 
