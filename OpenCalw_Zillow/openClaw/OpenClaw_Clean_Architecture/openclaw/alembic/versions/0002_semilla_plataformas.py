@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0002_semilla_plataformas"
@@ -19,13 +20,28 @@ depends_on: str | Sequence[str] | None = None
 
 PLATAFORMAS: tuple[tuple[str, str, str, str], ...] = (
     ("zillow", "Zillow", "zillow.com", "https://www.zillow.com/homes/{query}_rb/"),
-    ("realtor", "Realtor.com", "realtor.com", "https://www.realtor.com/realestateandhomes-search/{query}"),
+    (
+        "realtor",
+        "Realtor.com",
+        "realtor.com",
+        "https://www.realtor.com/realestateandhomes-search/{query}",
+    ),
     ("redfin", "Redfin", "redfin.com", "https://www.redfin.com/city/{query}"),
     ("trulia", "Trulia", "trulia.com", "https://www.trulia.com/{query}"),
-    ("loopnet", "LoopNet", "loopnet.com", "https://www.loopnet.com/search/commercial-real-estate/{query}/for-sale/"),
+    (
+        "loopnet",
+        "LoopNet",
+        "loopnet.com",
+        "https://www.loopnet.com/search/commercial-real-estate/{query}/for-sale/",
+    ),
     ("craigslist", "Craigslist", "craigslist.org", "https://{query}.craigslist.org/search/rea"),
     ("century21", "Century 21", "century21.com", "https://www.century21.com/real-estate/{query}/"),
-    ("coldwell", "Coldwell Banker", "coldwellbankerhomes.com", "https://www.coldwellbankerhomes.com/{query}/"),
+    (
+        "coldwell",
+        "Coldwell Banker",
+        "coldwellbankerhomes.com",
+        "https://www.coldwellbankerhomes.com/{query}/",
+    ),
     ("remax", "RE/MAX", "remax.com", "https://www.remax.com/homes-for-sale/{query}"),
 )
 
@@ -40,7 +56,8 @@ TABLA = sa.table(
 
 
 def upgrade() -> None:
-    op.execute(
+    conexion = op.get_bind()
+    conexion.execute(
         sa.text(
             """
             INSERT INTO plataformas (clave, nombre, dominio, plantilla_url, activa)
@@ -51,11 +68,6 @@ def upgrade() -> None:
                    plantilla_url = EXCLUDED.plantilla_url,
                    activa = true
             """
-        ).bindparams(
-            sa.bindparam("clave"),
-            sa.bindparam("nombre"),
-            sa.bindparam("dominio"),
-            sa.bindparam("plantilla_url"),
         ),
         [
             {
@@ -71,9 +83,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     claves = [fila[0] for fila in PLATAFORMAS]
-    op.execute(
-        sa.text("DELETE FROM plataformas WHERE clave = ANY(:claves)").bindparams(
-            sa.bindparam("claves", expanding=False)
-        ),
+    conexion = op.get_bind()
+    conexion.execute(
+        sa.text("DELETE FROM plataformas WHERE clave = ANY(:claves)"),
         {"claves": claves},
     )
