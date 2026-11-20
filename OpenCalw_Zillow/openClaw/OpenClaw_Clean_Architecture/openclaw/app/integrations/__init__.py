@@ -14,9 +14,26 @@ from app.integrations.scraper_port import (
     ScrapeStatus,
     TypedScrapeError,
 )
+from app.integrations.uao_client import (
+    CircuitBreakerState,
+    InMemoryRetryBuffer,
+    OrderRetryBufferPort,
+    PendingRetryEntry,
+    RedisRetryBuffer,
+    UaoCircuitBreaker,
+    UaoClient,
+    UaoDispatchResult,
+    UaoLiquidityPort,
+    UaoWithdrawalRequest,
+)
 
 __all__ = [
+    "CircuitBreakerState",
     "FirecrawlAdapter",
+    "InMemoryRetryBuffer",
+    "OrderRetryBufferPort",
+    "PendingRetryEntry",
+    "RedisRetryBuffer",
     "ScrapeErrorCode",
     "ScrapeResult",
     "ScrapeStatus",
@@ -28,4 +45,9 @@ __all__ = [
     "ScraperTimeoutError",
     "ScraperUpstreamError",
     "TypedScrapeError",
+    "UaoCircuitBreaker",
+    "UaoClient",
+    "UaoDispatchResult",
+    "UaoLiquidityPort",
+    "UaoWithdrawalRequest",
 ]
