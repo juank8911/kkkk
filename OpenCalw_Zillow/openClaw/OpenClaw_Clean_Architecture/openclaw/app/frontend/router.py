@@ -12,6 +12,7 @@ from app.api.routes import ingestion
 from app.core.redis_client import redis_client
 from app.frontend.markets import MercadoAtractivo, listar_mercados_ordenados
 from app.models.contracts import BarridoRequest, JobResponse
+from app.services.market_data import fuentes_directas_mercado
 
 PANEL_HTML_PATH = Path(__file__).resolve().parent / "panel.html"
 
@@ -36,30 +37,12 @@ async def listar_mercados_panel() -> list[MercadoAtractivo]:
 
 
 @router.get(
-    "/panel/api/oraculo",
-    summary="Telemetría segura del Oráculo geoespacial",
+    "/panel/api/datos-mercado",
+    summary="Fuentes directas y auditables de datos de mercado",
 )
-async def telemetria_oraculo_panel() -> dict[str, object]:
-    """Informa del estado del Oráculo sin exponer credenciales ni habilitar decisiones."""
-    return {
-        "componente": "oraculo_geoespacial",
-        "modo": "disabled",
-        "puerta_g2": "pendiente",
-        "decisiones_automaticas": False,
-        "proceso": "sin_ejecucion_hasta_aprobacion_g2",
-        "datos_guardados_por_propiedad": [
-            "zone_id",
-            "score",
-            "banda_informativa",
-            "contribuciones",
-            "source",
-            "license",
-            "data_version",
-            "spatial_resolution",
-            "observed_at",
-            "disclaimer",
-        ],
-    }
+async def telemetria_datos_mercado_panel() -> dict[str, object]:
+    """Expone solo catálogo/metadatos de fuentes, nunca credenciales ni secretos."""
+    return {"fuentes": fuentes_directas_mercado(), "decisiones_automaticas": False}
 
 
 @router.get(

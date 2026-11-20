@@ -48,7 +48,7 @@ def map_normalized_property_to_orm(
         condado=propiedad.condado,
         fuente_ubicacion=propiedad.fuente_ubicacion,
         confianza_ubicacion=propiedad.confianza_ubicacion,
-        datos_oraculo=dict(propiedad.datos_oraculo),
+        datos_mercado=dict(propiedad.datos_mercado),
         precio_usd=propiedad.precio_usd,
         ingreso_anual_estimado=propiedad.ingreso_anual_estimado,
         imagenes=list(propiedad.imagenes),

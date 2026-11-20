@@ -188,8 +188,8 @@
 
         <h2 style="margin-top: 16px;">Telemetría en vivo</h2>
         <ul id="telemetry-log"></ul>
-        <h2 style="margin-top: 16px;">Oráculo geoespacial</h2>
-        <pre id="oracle-status">Cargando estado del Oráculo...</pre>
+        <h2 style="margin-top: 16px;">Fuentes directas de mercado</h2>
+        <pre id="market-data-status">Cargando fuentes directas...</pre>
       </section>
     </div>
 
@@ -448,15 +448,15 @@
       }
     }
 
-    async function loadOracleTelemetry() {
+    async function loadMarketDataSources() {
       try {
-        const resp = await fetch("/panel/api/oraculo");
+        const resp = await fetch("/panel/api/datos-mercado");
         const data = await resp.json();
-        document.getElementById("oracle-status").textContent = JSON.stringify(data, null, 2);
-        if (!resp.ok) appendTelemetry(`Error consultando telemetría del Oráculo: HTTP ${resp.status}`);
+        document.getElementById("market-data-status").textContent = JSON.stringify(data, null, 2);
+        if (!resp.ok) appendTelemetry(`Error consultando fuentes directas: HTTP ${resp.status}`);
       } catch (err) {
-        document.getElementById("oracle-status").textContent = `Error: ${err}`;
-        appendTelemetry(`Error cargando Oráculo: ${err}`);
+        document.getElementById("market-data-status").textContent = `Error: ${err}`;
+        appendTelemetry(`Error cargando fuentes directas: ${err}`);
       }
     }
 
@@ -548,9 +548,9 @@
 
     loadMarkets();
     loadRecentJobs();
-    loadOracleTelemetry();
+    loadMarketDataSources();
     setInterval(loadRecentJobs, 15000);
-    setInterval(loadOracleTelemetry, 30000);
+    setInterval(loadMarketDataSources, 30000);
   </script>
 </body>
 </html>
