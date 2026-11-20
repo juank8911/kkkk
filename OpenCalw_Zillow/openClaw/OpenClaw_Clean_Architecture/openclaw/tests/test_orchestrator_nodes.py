@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 import fakeredis.aioredis
 import httpx
 import pytest
 
+from app.db.models import Decision
+from app.db.uow import UnidadDeTrabajo
 from app.orchestrator.config import AlertConfig, FinancialConfig, VisionConfig
 from app.orchestrator.nodes.financial import nodo_analisis_financiero
 from app.orchestrator.nodes.legal_audit import auditar_riesgo_legal, nodo_auditoria_legal
@@ -18,7 +21,11 @@ from app.orchestrator.nodes.telegram_alert import (
     nodo_alerta_telegram,
 )
 from app.orchestrator.nodes.vision import VisionAssessment, nodo_vision_artificial
-from app.orchestrator.workflow import ejecutar_pipeline_propiedad
+from app.orchestrator.workflow import (
+    construir_mapa_nodos,
+    ejecutar_pipeline_propiedad,
+    evaluar_y_persistir_propiedad_con_uow,
+)
 
 
 class FakeMultimodalValuator:
@@ -235,3 +242,116 @@ async def test_full_orchestrator_property_pipeline_end_to_end() -> None:
     assert final_state["requiere_revision_humana"] is True
     assert final_state["capex"] == 8_000.0
     assert len(notifier.sent_messages) == 1
+    assert [t["nodo"] for t in final_state["traza_nodos"]] == [
+        "enrutador",
+        "agente_financiero",
+        "vision",
+        "auditoria_legal",
+        "alerta",
+    ]
+
+
+async def test_s4_vision_high_capex_rejects_and_telegram_error_paths() -> None:
+    high_capex = FakeMultimodalValuator(
+        VisionAssessment(
+            capex_usd=80_000.0,
+            confianza=0.92,
+            motivo="Techo colapsado y cimentación dañada.",
+            severidad="alta",
+        )
+    )
+    res_rej = await nodo_vision_artificial(
+        {
+            "precio_usd": 100_000.0,
+            "noi": 10_000.0,
+            "imagenes": ["https://photos.zillowstatic.com/bad.jpg"],
+        },
+        valuator=high_capex,
+    )
+    assert res_rej["estado"] == "RECHAZADO"
+    assert res_rej["cap_rate_ajustado"] < 8.0
+
+    # Alerta omitida para propiedades rechazadas
+    omitted = await nodo_alerta_telegram({"estado": "RECHAZADO", "ubicacion": "123 St"})
+    assert omitted["estado"] == "ALERTA_OMITIDA"
+
+    # Telegram HTTP 500 y falta de credenciales manejados sin lanzar excepción
+    def err_500(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"ok": False})
+
+    bad_adapter = TelegramNotifierAdapter(
+        bot_token="tok",
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(err_500)),
+    )
+    ok_500, err_msg = await bad_adapter.send_message("chat-1", "msg")
+    assert ok_500 is False
+    assert err_msg == "telegram_http_500"
+
+    no_tok_adapter = TelegramNotifierAdapter(bot_token="")
+    ok_no_tok, err_no_tok = await no_tok_adapter.send_message("chat-1", "msg")
+    assert ok_no_tok is False
+    assert err_no_tok == "tg_token_not_configured"
+
+
+async def test_s4_evaluar_y_persistir_propiedad_con_uow_and_node_map() -> None:
+    class _FakeDecisionesRepo:
+        def __init__(self) -> None:
+            self.rows: list[Decision] = []
+
+        async def registrar(self, decision: Decision) -> Decision:
+            self.rows.append(decision)
+            return decision
+
+    class _FakeEventosRepo:
+        def __init__(self) -> None:
+            self.events: list[dict[str, Any]] = []
+
+        async def registrar(self, tipo: str, mensaje: str, **kwargs: Any) -> dict[str, Any]:
+            ev = {"tipo": tipo, "mensaje": mensaje, **kwargs}
+            self.events.append(ev)
+            return ev
+
+    class _FakeUoW(UnidadDeTrabajo):
+        def __init__(self) -> None:
+            self.decisiones = _FakeDecisionesRepo()  # type: ignore[assignment]
+            self.eventos = _FakeEventosRepo()  # type: ignore[assignment]
+
+    uow = _FakeUoW()
+    prop_id = uuid4()
+    job_id = uuid4()
+    notifier = FakeNotifier()
+
+    node_map = construir_mapa_nodos(notifier=notifier)
+    assert set(node_map.keys()) == {"agente_financiero", "vision", "auditoria_legal", "alerta"}
+
+    state, decision = await evaluar_y_persistir_propiedad_con_uow(
+        uow,
+        propiedad_id=prop_id,
+        job_id=job_id,
+        initial_state={
+            "ubicacion": "200 Oak Ave, Cleveland, OH 44102",
+            "condado": "Cuyahoga",
+            "precio_usd": 100_000.0,
+            "ingreso_anual_estimado": 18_000.0,
+            "imagenes": ["https://photos.zillowstatic.com/200.jpg"],
+            "descripcion_cruda": "Solid home built in 1960 with HOA: $50/mo and clear title.",
+        },
+        valuator=FakeMultimodalValuator(
+            VisionAssessment(
+                capex_usd=10_000.0,
+                confianza=0.91,
+                motivo="Buen estado general.",
+                severidad="baja",
+            )
+        ),
+        notifier=notifier,
+        dedupe_store=InMemoryAlertDedupeStore(),
+        chat_id="chat-s4",
+    )
+
+    assert state["estado"] == "ALERTA_ENVIADA"
+    assert state["hoa_mensual_usd"] == pytest.approx(50.0)
+    assert decision.propiedad_id == prop_id
+    assert decision.veredicto == "comprar"
+    assert len(uow.decisiones.rows) == 1  # type: ignore[attr-defined]
+    assert uow.eventos.events[0]["tipo"] == "orquestador.decision"  # type: ignore[attr-defined]
