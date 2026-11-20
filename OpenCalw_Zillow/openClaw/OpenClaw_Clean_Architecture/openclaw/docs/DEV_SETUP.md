@@ -18,7 +18,45 @@
 ```bash
 curl -X POST http://localhost:8000/v1/openclaw/barridos \
   -H "Content-Type: application/json" \
+  -H "X-OpenClaw-Tactical-Key: $OPENCLAW_API_KEY" \
   -d '{"query": "Miami, FL", "plataformas": ["zillow", "redfin"]}'
+```
+
+5. Aplicar las migraciones de base de datos:
+
+```bash
+alembic upgrade head
+```
+
+## Autenticacion
+
+Todo endpoint de negocio exige la cabecera `X-OpenClaw-Tactical-Key`. El
+servicio nunca compara la clave en claro: guarda y contrasta su SHA-256 con
+`hmac.compare_digest`. Respuestas posibles:
+
+| Situacion | Codigo | `code` del cuerpo |
+|---|---|---|
+| Falta la cabecera | 401 | `unauthorized` |
+| La clave no coincide | 403 | `forbidden` |
+| El servicio no tiene clave configurada | 503 | `service_unavailable` |
+
+En produccion se recomienda informar `OPENCLAW_API_KEY_SHA256` (huella
+precomputada) en lugar de la clave en claro. `/health` y `/readyz` siguen
+siendo publicos para las sondas del orquestador.
+
+## Base de datos
+
+El esquema vive en `app/db/models.py` y se versiona con Alembic:
+
+| Revision | Contenido |
+|---|---|
+| `0001_esquema_inicial` | `jobs`, `propiedades`, `decisiones`, `eventos`, `plataformas` |
+| `0002_semilla_plataformas` | Semilla idempotente de las 9 plataformas del catalogo |
+
+```bash
+alembic upgrade head     # aplicar
+alembic downgrade -1     # revertir la ultima
+alembic current          # revision aplicada
 ```
 
 ## Endpoints
@@ -30,6 +68,10 @@ curl -X POST http://localhost:8000/v1/openclaw/barridos \
 | POST | `/v1/openclaw/barridos` | Valida y encola un barrido | Disponible (S1-03) |
 | GET | `/v1/openclaw/barridos/{job_id}` | Estado y progreso del barrido | Disponible (S1-04) |
 | POST | `/v1/webhook/telegram-comando` | Comando `/buy` | 403 salvo `BUY_MODE=sandbox` |
+| GET | `/v1/openclaw/barridos` | (pendiente) listado paginado de jobs | Sprint 3 |
+
+Salvo `/health` y `/readyz`, todas las rutas exigen la cabecera
+`X-OpenClaw-Tactical-Key`.
 
 Las plataformas se envian como claves del catalogo cerrado (`zillow`, `realtor`,
 `redfin`, `trulia`, `loopnet`, `craigslist`, `century21`, `coldwell`, `remax`),

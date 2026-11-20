@@ -8,6 +8,7 @@ Reglas del proyecto:
 
 from __future__ import annotations
 
+import hashlib
 from functools import lru_cache
 from typing import Literal
 
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
 
     FIRECRAWL_API_KEY: str = ""
     OPENCLAW_API_KEY: str = ""
+    OPENCLAW_API_KEY_SHA256: str = ""
 
     TG_TOKEN: str = ""
     TG_CHAT_ID: str = ""
@@ -65,6 +67,21 @@ class Settings(BaseSettings):
     @property
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @property
+    def api_key_hash(self) -> str:
+        """Huella SHA-256 esperada de la API key tactica.
+
+        Se prefiere ``OPENCLAW_API_KEY_SHA256`` (permite no guardar la clave en
+        claro en el servidor) y, si no existe, se deriva de ``OPENCLAW_API_KEY``.
+        """
+        precomputada = self.OPENCLAW_API_KEY_SHA256.strip().lower()
+        if precomputada:
+            return precomputada
+        en_claro = self.OPENCLAW_API_KEY.strip()
+        if not en_claro:
+            return ""
+        return hashlib.sha256(en_claro.encode("utf-8")).hexdigest()
 
     @property
     def secretos_obligatorios(self) -> tuple[str, ...]:
