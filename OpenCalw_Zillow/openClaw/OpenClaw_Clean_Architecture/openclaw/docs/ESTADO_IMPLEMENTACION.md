@@ -238,6 +238,21 @@ análisis estático y el CI queda como puerta de calidad.
   registrados en cada transición.
 - Pruebas: `tests/test_offers.py` cubre el flujo válido y los saltos ilegales.
 
+### Tracker automático post-oferta
+
+- `app/services/offer_tracker.py` define `OfertaTrackerPort`, interpreta señales
+  explícitas (`sold`, `withdrawn`) y deja las señales ambiguas como eventos sin
+  mutar el estado de negocio.
+- Cada consulta toma un lock Redis por oferta con TTL; el token se verifica al
+  liberarlo para evitar que una ejecución tardía borre el lock de otra.
+- La señal `sold` solo cierra una oferta previamente aceptada; una ficha retirada
+  cancela una oferta activa. `pending` y `under contract` son informativas.
+- `app/workers/offer_tracker.py` procesa lotes configurables y registra fallos
+  por oferta sin detener las restantes. `docker-compose.dev.yml` lo ejecuta como
+  servicio separado `offer-tracker`.
+- Configuración: `OFERTA_TRACKER_INTERVAL_SEGUNDOS`,
+  `OFERTA_TRACKER_LOCK_TTL_SEGUNDOS` y `OFERTA_TRACKER_MAX_OFERTAS_LOTE`.
+
 ## Siguiente corte
 1. Fase 96: estratega macro con parámetros versionados y scheduler seguro.
 2. Fase 97: auditoría legal ampliada con fuentes de registros públicos.

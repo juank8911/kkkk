@@ -7,8 +7,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.db.models import Oferta, OfertaEvento  # pyright: ignore[reportAttributeAccessIssue]
+from app.db.models import Oferta, OfertaEvento, Propiedad  # pyright: ignore[reportAttributeAccessIssue]
 from app.models.offers import OfertaEstado
 from app.services.offers import ahora_si_cerrada, validar_transicion_oferta
 
@@ -25,6 +26,21 @@ class RepositorioOfertas:
             select(Oferta).where(Oferta.propiedad_id == propiedad_id).order_by(Oferta.creada_en.desc())
         )
         return list(resultado.scalars().all())
+
+    async def listar_activas(self, *, limite: int) -> list[tuple[Oferta, Propiedad]]:
+        estados = (
+            OfertaEstado.PROPUESTA.value,
+            OfertaEstado.CONTRAOFERTA.value,
+            OfertaEstado.ACEPTADA.value,
+        )
+        resultado = await self._sesion.execute(
+            select(Oferta, Propiedad)
+            .join(Propiedad, Propiedad.id == Oferta.propiedad_id)
+            .where(Oferta.estado.in_(estados))
+            .order_by(Oferta.actualizada_en.asc())
+            .limit(limite)
+        )
+        return [(oferta, propiedad) for oferta, propiedad in resultado.all()]
 
     async def crear(self, oferta: Oferta, *, notas_evento: str | None = None) -> Oferta:
         self._sesion.add(oferta)
@@ -71,3 +87,16 @@ class RepositorioOfertas:
         )
         await self._sesion.flush()
         return oferta
+
+    async def registrar_senal(self, oferta: Oferta, *, senal: str, notas: str) -> None:
+        """Guarda una señal informativa sin fingir una transición de estado."""
+        self._sesion.add(
+            OfertaEvento(
+                oferta_id=oferta.id,
+                estado_anterior=oferta.estado,
+                estado_nuevo=oferta.estado,
+                actor="offer-tracker",
+                notas=f"senal={senal}; {notas}",
+            )
+        )
+        await self._sesion.flush()
