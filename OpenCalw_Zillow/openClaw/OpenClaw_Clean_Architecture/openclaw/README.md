@@ -8,7 +8,8 @@ los evalua con un grafo de decision.
 
 Sprint 0 cerrado: repositorio, CI, entorno Docker, configuracion tipada con
 validacion al arranque, logging estructurado y endpoints de salud.
-El sprint 1 (contratos y nucleo) empieza con S1-01 ya resuelto.
+Del sprint 1 estan listos los contratos (S1-02), el catalogo de plataformas
+(S1-07) y los endpoints de barrido (S1-03 y S1-04).
 
 | Capacidad | Estado |
 |---|---|
@@ -16,7 +17,9 @@ El sprint 1 (contratos y nucleo) empieza con S1-01 ya resuelto.
 | Configuracion validada y sin secretos por defecto | Listo |
 | Logging JSON con `job_id` | Listo |
 | Docker multi-target (api y worker) | Listo |
-| Contratos de ingesta validados | Sprint 1 |
+| Contratos de ingesta validados | Listo |
+| Crear y consultar barridos | Listo |
+| `/buy` bloqueado salvo modo sandbox | Listo |
 | Persistencia PostgreSQL | Sprint 2 |
 | Grafo LangGraph | Sprint 4 |
 
@@ -27,6 +30,9 @@ cp .env.example .env          # completar FIRECRAWL_API_KEY y OPENCLAW_API_KEY
 make up                       # Redis, PostgreSQL, API y worker
 curl http://localhost:8000/health
 curl http://localhost:8000/readyz
+curl -X POST http://localhost:8000/v1/openclaw/barridos \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Miami, FL", "plataformas": ["zillow"]}'
 ```
 
 Sin Docker:

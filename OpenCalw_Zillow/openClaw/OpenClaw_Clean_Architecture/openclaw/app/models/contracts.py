@@ -6,8 +6,8 @@ en el esquema OpenAPI y validación uniforme de payloads.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.services.platforms import VALID_PLATFORM_KEYS, validate_platforms
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Estados válidos del ciclo de vida de un job de barrido."""
 
     QUEUED = "queued"
@@ -43,8 +43,7 @@ class BarridoRequest(BaseModel):
         min_length=1,
         max_length=len(VALID_PLATFORM_KEYS),
         description=(
-            "Lista de claves del catálogo cerrado de plataformas: "
-            + ", ".join(VALID_PLATFORM_KEYS)
+            "Lista de claves del catálogo cerrado de plataformas: " + ", ".join(VALID_PLATFORM_KEYS)
         ),
         examples=[["zillow", "realtor", "redfin"]],
     )
@@ -85,7 +84,7 @@ class JobResponse(BaseModel):
     query: str = Field(..., description="Consulta solicitada para el barrido.")
     plataformas: list[str] = Field(..., description="Claves de plataformas validadas.")
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Marca de tiempo UTC de creación del job.",
     )
     updated_at: datetime | None = Field(
@@ -139,6 +138,6 @@ class ErrorResponse(BaseModel):
         description="Identificador de trazabilidad para correlación en logs.",
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="Marca de tiempo UTC en la que ocurrió el error.",
     )

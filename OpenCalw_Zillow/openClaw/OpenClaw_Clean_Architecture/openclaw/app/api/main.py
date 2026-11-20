@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.errors import registrar_manejadores
 from app.api.routes import execution, health, ingestion
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -39,6 +40,8 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+registrar_manejadores(app)
 
 app.include_router(health.router)
 app.include_router(ingestion.router)
