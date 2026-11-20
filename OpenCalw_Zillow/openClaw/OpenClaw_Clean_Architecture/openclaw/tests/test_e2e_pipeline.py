@@ -24,11 +24,15 @@ from app.orchestrator.config import AlertConfig
 from app.orchestrator.nodes.telegram_alert import RedisAlertDedupeStore
 from app.orchestrator.nodes.vision import VisionAssessment
 from app.orchestrator.workflow import ejecutar_pipeline_propiedad
+from app.services import idempotency as idempotency_module
 from app.services import job_store as job_store_module
 from app.services.deduplicator import deduplicar_propiedades
+from app.services.domain_semaphore import SemaforosPorDominio
 from app.services.enrichment import enriquecer_propiedad_desde_markdown
 from app.services.normalizer import normalizar_markdown_propiedades
+from app.services.platforms import get_platform_spec
 from app.services.rate_limiter import SlidingWindowRateLimiter
+from app.workers.state_machine import TransicionInvalida, aplicar_transicion
 from tests.test_scraper_contracts import CassetteFirecrawlClient, load_cassette
 
 
@@ -64,6 +68,7 @@ async def test_s5_05_e2e_sweep_completes_without_intervention(
     """Flujo E2E completo: API -> Redis Stream -> Scraper -> Normalizer -> Dedup -> Grafo -> Alerta -> completed."""
     monkeypatch.setattr(ingestion_route, "redis_client", fake_redis)
     monkeypatch.setattr(job_store_module, "redis_client", fake_redis)
+    monkeypatch.setattr(idempotency_module, "redis_client", fake_redis)
     monkeypatch.setattr(settings, "APP_ENV", "test")
     monkeypatch.setattr(settings, "OPENCLAW_API_KEY", "e2e-tactical-key")
     monkeypatch.setattr(settings, "OPENCLAW_API_KEY_SHA256", "")
@@ -98,10 +103,11 @@ async def test_s5_05_e2e_sweep_completes_without_intervention(
         payload = json.loads(fields[b"payload"].decode("utf-8"))
         assert payload["job_id"] == str(job_id)
 
-        await job_store_module.job_store.marcar(job_id, JobStatus.RUNNING)
+        await aplicar_transicion(job_id, JobStatus.RUNNING)
 
-        # 3. Extraer cada plataforma usando cassettes sin red + rate limiter fail-closed
+        # 3. Extraer cada plataforma usando idempotencia S3-02, semáforo S3-04 y cassettes sin red
         limiter = SlidingWindowRateLimiter(redis_client=fake_redis)
+        semaforos = SemaforosPorDominio(limite=2)
         cassettes_by_platform = {
             "zillow": load_cassette("zillow_success"),
             "realtor": load_cassette("realtor_success"),
@@ -110,11 +116,18 @@ async def test_s5_05_e2e_sweep_completes_without_intervention(
         progress: dict[str, str] = {}
 
         for platform in payload["plataformas"]:
+            claimed = await idempotency_module.reclamar(job_id, platform)
+            assert claimed is True
+            # Una segunda reclamación para el mismo (job_id, platform) se omite por idempotencia
+            assert await idempotency_module.reclamar(job_id, platform) is False
+
+            spec = get_platform_spec(platform)
             adapter = FirecrawlAdapter(
                 client=CassetteFirecrawlClient([cassettes_by_platform[platform]]),
                 rate_limiter=limiter,
             )
-            scrape_res = await adapter.scrape(platform, payload["query"])
+            async with semaforos.turno(spec.domain):
+                scrape_res = await adapter.scrape(platform, payload["query"])
             assert scrape_res.ok is True
             progress[platform] = "exito"
 
@@ -153,9 +166,13 @@ async def test_s5_05_e2e_sweep_completes_without_intervention(
         assert all(d["estado"] == "ALERTA_ENVIADA" for d in decisions)
         assert len(notifier.messages) == 2
 
-        # 5. Marcar job como completed y confirmar con XACK
-        await job_store_module.job_store.marcar(job_id, JobStatus.COMPLETED, progress=progress)
+        # 5. Transicionar a completed con máquina de estados (S3-03) y confirmar con XACK
+        await aplicar_transicion(job_id, JobStatus.COMPLETED, progress=progress)
         await fake_redis.xack(stream, group, msg_id)
+
+        # Verificar que un job completed no puede reabrirse ilegalmente
+        with pytest.raises(TransicionInvalida):
+            await aplicar_transicion(job_id, JobStatus.RUNNING)
 
         # 6. Consultar estado final del job vía GET
         status_resp = await client.get(f"/v1/openclaw/barridos/{job_id}")
