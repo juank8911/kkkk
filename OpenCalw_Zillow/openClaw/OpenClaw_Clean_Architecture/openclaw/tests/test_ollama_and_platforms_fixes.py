@@ -1,4 +1,4 @@
-"""Pruebas de URLs de plataformas (Redfin/Realtor/Zillow) y pipeline Ollama -> normalizador."""
+"""Pruebas de URLs de plataformas (Redfin/Realtor/Zillow) y pipeline Ollama/determinista -> normalizador."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from app.services.ollama_listing_extractor import (
     OllamaListing,
     enriquecer_ubicacion_extraccion,
     extraction_to_markdown,
+    extraer_viviendas_determinista,
 )
 from app.services.platforms import build_platform_url
 
@@ -15,7 +16,7 @@ from app.services.platforms import build_platform_url
 def test_build_platform_url_resolves_redfin_realtor_and_zillow_cleanly() -> None:
     assert (
         build_platform_url("redfin", "Memphis, TN")
-        == "https://www.redfin.com/city/11797/TN/Memphis"
+        == "https://www.redfin.com/city/11883/TN/Memphis"
     )
     assert (
         build_platform_url("redfin", "Cleveland, OH")
@@ -80,6 +81,39 @@ async def test_ollama_extraction_formats_usd_price_and_resolves_county(monkeypat
     assert prop.precio_usd == 118000.0
     assert prop.condado == "Shelby"
     assert prop.ingreso_anual_estimado == 16200.0
+
+
+def test_deterministic_fallback_extracts_realtor_zillow_and_filters_wrong_state() -> None:
+    md_realtor = """
+    [688 E McKellar Ave, Memphis, TN 38106](https://www.realtor.com/realestateandhomes-detail/688-E-McKellar-Ave_Memphis_TN_38106_M87694-00926)
+    House for sale
+    $60,000
+    - 3bed
+    - 1.5bath
+    - 1,309sqft
+
+    [125 E Lake St, Rockwell City, IA 50579](https://www.redfin.com/IA/Rockwell-City/125-E-Lake-St-50579/home/116171017)
+    $139,900
+    3 beds 1 bath 1,231 sq ft
+
+    - [$339,000](https://www.zillow.com/homedetails/5577-Glenwild-Ave-Memphis-TN-38119/42215378_zpid/)
+      - **3** bds
+      - **2** ba
+      - **2,584** sqft
+    House for sale
+    [5577 Glenwild Ave, Memphis, TN 38119](https://www.zillow.com/homedetails/5577-Glenwild-Ave-Memphis-TN-38119/42215378_zpid/)
+    """
+    ext = extraer_viviendas_determinista(
+        md_realtor,
+        query="Memphis, TN",
+        platform="realtor",
+        url_origen="https://www.realtor.com/realestateandhomes-search/Memphis_TN",
+    )
+    assert len(ext.viviendas_en_venta) == 2
+    precios = {v.precio_usd for v in ext.viviendas_en_venta}
+    assert precios == {60000.0, 339000.0}
+    assert all(v.condado == "Shelby" for v in ext.viviendas_en_venta)
+    assert any("estado_distinto:IA!=TN" in r["motivo"] for r in ext.rechazadas)
 
 
 def test_normalizer_allows_missing_county_only_when_explicitly_disabled() -> None:

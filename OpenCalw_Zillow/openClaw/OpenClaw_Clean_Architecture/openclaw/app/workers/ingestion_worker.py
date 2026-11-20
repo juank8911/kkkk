@@ -30,6 +30,7 @@ from app.core.logging import configure_logging, job_context
 from app.core.redis_client import redis_client
 from app.db.models import Job
 from app.db.uow import unidad_de_trabajo
+from app.frontend.markets import listar_mercados_ordenados
 from app.models.contracts import JobStatus
 from app.orchestrator.decisiones import estado_inicial_desde_orm, evaluar_y_registrar_decision
 from app.orchestrator.nodes.telegram_alert import RedisAlertDedupeStore
@@ -39,6 +40,7 @@ from app.services.ingestion_pipeline import procesar_lote_extraccion_con_uow
 from app.services.ollama_listing_extractor import (
     enriquecer_ubicacion_extraccion,
     extraction_to_markdown,
+    extraer_viviendas_determinista,
     extraer_viviendas_ollama,
 )
 from app.services.platforms import InvalidPlatformError, get_platform_spec
@@ -107,6 +109,15 @@ async def _extraer_plataforma(clave: str, query: str, job_id: UUID | None) -> di
     return {"plataforma": clave, **resultado}
 
 
+def _renta_anual_referencia_mercado(query: str) -> float:
+    """Devuelve la renta anual de referencia del catálogo de mercados si el anuncio no incluye renta."""
+    clave = query.strip().lower()
+    for mercado in listar_mercados_ordenados():
+        if mercado.query.strip().lower() == clave or mercado.ciudad.strip().lower() in clave:
+            return round(mercado.renta_media_usd * 12.0, 2)
+    return 0.0
+
+
 async def _persistir_resultado(
     job_id: UUID,
     resultado: dict[str, Any],
@@ -122,28 +133,52 @@ async def _persistir_resultado(
     if not markdown:
         return {**resultado, "persistencia": {"persistidas": 0, "motivo": "markdown_vacio"}}
 
+    plataforma_nombre = str(resultado.get("plataforma") or "desconocida")
     markdown_para_pipeline = markdown
+    fuente_extraccion = "raw"
     extraction, extraction_error = await extraer_viviendas_ollama(
         markdown,
         query=query,
-        platform=str(resultado.get("plataforma") or "desconocida"),
+        platform=plataforma_nombre,
         url_origen=resultado.get("dominio"),
     )
-    if extraction is not None:
+    if extraction is not None and extraction.viviendas_en_venta:
+        fuente_extraccion = f"ollama:{settings.OLLAMA_MODEL}"
+    else:
+        det = extraer_viviendas_determinista(
+            markdown,
+            query=query,
+            platform=plataforma_nombre,
+            url_origen=resultado.get("dominio"),
+        )
+        if det.viviendas_en_venta:
+            extraction = det
+            fuente_extraccion = "determinista_fallback"
+            logger.info(
+                "extraccion_determinista_aplicada",
+                extra={
+                    "job_id": str(job_id),
+                    "plataforma": plataforma_nombre,
+                    "viviendas": len(det.viviendas_en_venta),
+                    "motivo_ollama": extraction_error or "ollama_vacio",
+                },
+            )
+
+    if extraction is not None and extraction.viviendas_en_venta:
         extraction = await enriquecer_ubicacion_extraccion(extraction, query=query)
         markdown_para_pipeline = extraction_to_markdown(
             extraction,
-            platform=str(resultado.get("plataforma") or "desconocida"),
+            platform=plataforma_nombre,
             url_origen=resultado.get("dominio"),
             query=query,
         )
-        if not markdown_para_pipeline:
-            return {
-                **resultado,
-                "status": "sin_propiedades",
-                "extraccion": {"modelo": settings.OLLAMA_MODEL, "viviendas": 0},
-                "persistencia": {"persistidas": 0, "motivo": "ollama_sin_viviendas"},
-            }
+    elif extraction is not None:
+        return {
+            **resultado,
+            "status": "sin_propiedades",
+            "extraccion": {"modelo": settings.OLLAMA_MODEL, "viviendas": 0},
+            "persistencia": {"persistidas": 0, "motivo": "sin_viviendas_en_venta"},
+        }
 
     try:
         async with unidad_de_trabajo() as unidad:
@@ -159,7 +194,7 @@ async def _persistir_resultado(
             summary = await procesar_lote_extraccion_con_uow(
                 unidad,
                 job_id=job_id,
-                plataforma=str(resultado.get("plataforma") or "desconocida"),
+                plataforma=plataforma_nombre,
                 markdown=markdown_para_pipeline,
                 url_origen=resultado.get("dominio"),
                 require_county=False,
@@ -168,6 +203,7 @@ async def _persistir_resultado(
         evaluadas = 0
         if summary.propiedad_ids:
             dedupe_store = RedisAlertDedupeStore(redis_client)
+            renta_ref = _renta_anual_referencia_mercado(query)
             async with unidad_de_trabajo() as unidad_eval:
                 propiedades_job = await unidad_eval.propiedades.listar_por_job(job_id)
                 ids_nuevos = set(summary.propiedad_ids)
@@ -175,10 +211,16 @@ async def _persistir_resultado(
                     if prop.id not in ids_nuevos:
                         continue
                     try:
+                        estado_ini = estado_inicial_desde_orm(prop)
+                        if (
+                            float(estado_ini.get("ingreso_anual_estimado") or 0.0) <= 0.0
+                            and renta_ref > 0.0
+                        ):
+                            estado_ini["ingreso_anual_estimado"] = renta_ref
                         await evaluar_y_registrar_decision(
                             unidad_eval,
                             propiedad_id=prop.id,
-                            estado_inicial=estado_inicial_desde_orm(prop),
+                            estado_inicial=estado_ini,
                             job_id=job_id,
                             dedupe_store=dedupe_store,
                         )
@@ -194,12 +236,14 @@ async def _persistir_resultado(
             "resultado_scraper_persistido",
             extra={
                 "job_id": str(job_id),
-                "plataforma": resultado.get("plataforma"),
+                "plataforma": plataforma_nombre,
                 "persistidas": summary.persistidas,
+                "evaluadas": evaluadas,
+                "fuente_extraccion": fuente_extraccion,
             },
         )
         extra = (
-            {"modelo": settings.OLLAMA_MODEL, "viviendas": len(extraction.viviendas_en_venta)}
+            {"fuente": fuente_extraccion, "viviendas": len(extraction.viviendas_en_venta)}
             if extraction
             else {"fallback": extraction_error or "ollama_no_configurado"}
         )

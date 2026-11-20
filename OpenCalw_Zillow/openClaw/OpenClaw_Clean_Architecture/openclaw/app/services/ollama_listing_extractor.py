@@ -223,6 +223,200 @@ async def enriquecer_ubicacion_extraccion(
     return extraction.model_copy(update={"viviendas_en_venta": actualizadas})
 
 
+_LISTING_URL_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"https://www\.zillow\.com/homedetails/[^\s)\"'>]+", re.IGNORECASE),
+    re.compile(r"https://www\.realtor\.com/realestateandhomes-detail/[^\s)\"'>]+", re.IGNORECASE),
+    re.compile(r"https://www\.redfin\.com/[A-Z]{2}/[^\s)\"'>]+/home/\d+", re.IGNORECASE),
+    re.compile(r"https://www\.trulia\.com/(?:home|p)/[^\s)\"'>]+", re.IGNORECASE),
+    re.compile(r"https://www\.loopnet\.com/Listing/[^\s)\"'>]+", re.IGNORECASE),
+)
+
+_CARD_PRICE_RE = re.compile(r"\$\s*([\d,]{5,}(?:\.\d+)?)")
+_CARD_ADDRESS_RE = re.compile(
+    r"\b(\d{1,6}\s+[A-Za-z0-9.'\- ]{2,55}?"
+    r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|"
+    r"Way|Pl|Place|Cir|Circle|Pkwy|Parkway|Ter|Terrace|Hwy|Highway|Trl|Trail|Loop|Cv|Cove)\b"
+    r"[^,\n\]]{0,25},\s*[A-Za-z .'-]{2,35},\s*([A-Z]{2})(?:\s+(\d{5}))?)"
+)
+_CARD_STREET_ONLY_RE = re.compile(
+    r"(?m)^(\d{1,6}\s+[A-Za-z0-9.'\- ]{2,55}?"
+    r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|"
+    r"Way|Pl|Place|Cir|Circle|Pkwy|Parkway|Ter|Terrace|Hwy|Highway|Trl|Trail|Loop|Cv|Cove)\b[^\n]{0,20})$"
+)
+_CARD_CITY_ST_ZIP_RE = re.compile(r"(?m)^([A-Za-z .'-]{2,35},\s*([A-Z]{2})(?:\s+(\d{5}))?)$")
+_CARD_BEDS_RE = re.compile(r"(?i)(?:\*\*)?(\d+(?:\.\d+)?)(?:\*\*)?\s*(?:bds?|beds?|bedrooms?)\b")
+_CARD_BATHS_RE = re.compile(r"(?i)(?:\*\*)?(\d+(?:\.\d+)?)(?:\*\*)?\s*(?:ba|baths?|bathrooms?)\b")
+_CARD_SQFT_RE = re.compile(r"(?i)(?:\*\*)?([\d,]{3,6})(?:\*\*)?\s*(?:sq\s*ft|sqft)\b")
+_CARD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^\s)]+)\)")
+_QUERY_STATE_RE = re.compile(r",\s*([A-Z]{2})\b")
+
+
+def _recortar_bloque_anuncios(markdown: str, *, max_chars: int = 8000) -> str:
+    """Elimina menús de navegación iniciales y enfoca la ventana desde el primer anuncio/precio."""
+    primer_indice: int | None = None
+    for pat in _LISTING_URL_PATTERNS:
+        m = pat.search(markdown)
+        if m is not None and (primer_indice is None or m.start() < primer_indice):
+            primer_indice = m.start()
+    if primer_indice is None:
+        m_price = _CARD_PRICE_RE.search(markdown)
+        if m_price is not None:
+            primer_indice = m_price.start()
+    inicio = max(0, primer_indice - 300) if primer_indice is not None else 0
+    return markdown[inicio : inicio + max_chars]
+
+
+def _extraer_estado_objetivo(query: str) -> str | None:
+    m = _QUERY_STATE_RE.search(query.strip().upper())
+    return m.group(1) if m else None
+
+
+def _extraer_precio_tarjeta(fragmento: str) -> float | None:
+    for m in _CARD_PRICE_RE.finditer(fragmento):
+        linea_ini = fragmento.rfind("\n", 0, m.start()) + 1
+        linea_fin = fragmento.find("\n", m.end())
+        linea = fragmento[linea_ini : len(fragmento) if linea_fin == -1 else linea_fin].lower()
+        if any(tok in linea for tok in ("/mo", "per month", "rent", "hoa", "tax", "fee")):
+            continue
+        try:
+            valor = float(m.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if 10_000.0 <= valor <= 25_000_000.0:
+            return round(valor, 2)
+    return None
+
+
+def extraer_viviendas_determinista(
+    markdown: str,
+    *,
+    query: str,
+    platform: str,
+    url_origen: str | None = None,
+    max_items: int = 25,
+) -> OllamaExtraction:
+    """Extrae viviendas individuales de páginas de resultados sin inventar datos.
+
+    Se usa como respaldo rápido cuando Ollama no devuelve anuncios o agota timeout.
+    """
+    if not markdown.strip():
+        return OllamaExtraction()
+
+    estado_objetivo = _extraer_estado_objetivo(query)
+    hits: list[tuple[int, int, str]] = []
+    vistas: set[str] = set()
+    for pat in _LISTING_URL_PATTERNS:
+        for match in pat.finditer(markdown):
+            url = match.group(0).rstrip(".,;)]")
+            if url not in vistas:
+                vistas.add(url)
+                hits.append((match.start(), match.end(), url))
+
+    hits.sort(key=lambda item: item[0])
+    viviendas: list[OllamaListing] = []
+    rechazadas: list[dict[str, str]] = []
+
+    for idx, (pos, end_pos, url) in enumerate(hits):
+        if len(viviendas) >= max_items:
+            break
+        prev_end = hits[idx - 1][1] if idx > 0 else 0
+        inicio = max(prev_end, pos - 90)
+        siguiente_pos = hits[idx + 1][0] if idx + 1 < len(hits) else len(markdown)
+        limite_sig = max(end_pos, siguiente_pos - 28) if idx + 1 < len(hits) else len(markdown)
+        fin = min(len(markdown), limite_sig, end_pos + 900)
+        enlace_previo = markdown[max(prev_end, pos - 28) : pos]
+        cuerpo_post = markdown[end_pos:fin]
+        fragmento = markdown[inicio:fin]
+
+        precio = (
+            _extraer_precio_tarjeta(enlace_previo)
+            or _extraer_precio_tarjeta(cuerpo_post)
+            or _extraer_precio_tarjeta(fragmento)
+        )
+        if precio is None:
+            rechazadas.append({"motivo": "sin_precio_valido", "fragmento": url[:160]})
+            continue
+
+        direccion: str | None = None
+        ciudad: str | None = None
+        codigo_postal: str | None = None
+        estado_detectado: str | None = None
+
+        m_addr = _CARD_ADDRESS_RE.search(fragmento)
+        if m_addr:
+            direccion = " ".join(m_addr.group(1).split())
+            estado_detectado = m_addr.group(2).upper()
+            codigo_postal = m_addr.group(3)
+            partes = [p.strip() for p in direccion.split(",")]
+            if len(partes) >= 2:
+                ciudad = f"{partes[1]}, {estado_detectado}"
+        else:
+            m_street = _CARD_STREET_ONLY_RE.search(fragmento)
+            m_city = _CARD_CITY_ST_ZIP_RE.search(fragmento)
+            if m_street and m_city:
+                calle = " ".join(m_street.group(1).split())
+                estado_detectado = m_city.group(2).upper()
+                codigo_postal = m_city.group(3)
+                ciudad_linea = " ".join(m_city.group(1).split())
+                ciudad = ciudad_linea.rsplit(" ", 1)[0] if codigo_postal else ciudad_linea
+                direccion = f"{calle}, {ciudad_linea}"
+
+        if not direccion:
+            rechazadas.append({"motivo": "sin_direccion", "fragmento": url[:160]})
+            continue
+
+        if estado_objetivo and estado_detectado and estado_detectado != estado_objetivo:
+            rechazadas.append(
+                {
+                    "motivo": f"estado_distinto:{estado_detectado}!={estado_objetivo}",
+                    "fragmento": direccion[:160],
+                }
+            )
+            continue
+
+        m_beds = _CARD_BEDS_RE.search(fragmento)
+        m_baths = _CARD_BATHS_RE.search(fragmento)
+        m_sqft = _CARD_SQFT_RE.search(fragmento)
+        imagenes = [
+            img
+            for img in _CARD_IMAGE_RE.findall(fragmento)
+            if not any(tok in img.lower() for tok in ("logo", "favicon", "icon", ".svg", "sprite"))
+        ][:5]
+
+        detalles: list[str] = []
+        if m_beds:
+            detalles.append(f"{m_beds.group(1)} bd")
+        if m_baths:
+            detalles.append(f"{m_baths.group(1)} ba")
+        if m_sqft:
+            detalles.append(f"{m_sqft.group(1)} sqft")
+        desc = (
+            f"Vivienda en venta en {direccion} ({', '.join(detalles)})"
+            if detalles
+            else f"Vivienda en venta extraída de {platform} en {direccion}"
+        )
+
+        viviendas.append(
+            OllamaListing(
+                source_id=url,
+                url=url,
+                direccion=direccion,
+                ciudad=ciudad or query,
+                codigo_postal=codigo_postal,
+                condado=inferir_condado_por_mercado(ciudad, query),
+                precio_usd=precio,
+                habitaciones=float(m_beds.group(1)) if m_beds else None,
+                banos=float(m_baths.group(1)) if m_baths else None,
+                superficie_sqft=float(m_sqft.group(1).replace(",", "")) if m_sqft else None,
+                descripcion=desc,
+                imagenes=imagenes,
+                confianza_extraccion=0.85,
+            )
+        )
+
+    return OllamaExtraction(viviendas_en_venta=viviendas, rechazadas=rechazadas)
+
+
 async def extraer_viviendas_ollama(
     markdown: str,
     *,
@@ -235,24 +429,30 @@ async def extraer_viviendas_ollama(
     if not settings.OLLAMA_API_KEY.strip() or not markdown.strip():
         return None, "ollama_no_configurado"
 
+    ventana_markdown = _recortar_bloque_anuncios(
+        markdown,
+        max_chars=min(settings.OLLAMA_MAX_MARKDOWN_CHARS, 8000),
+    )
     payload = {
         "model": settings.OLLAMA_MODEL,
         "stream": False,
         "format": "json",
+        "options": {"num_ctx": 4096, "temperature": 0},
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": (
                     f"Consulta original: {query}\nPlataforma: {platform}\nURL: {url_origen}\n\n"
-                    f"Contenido crudo:\n{markdown[:settings.OLLAMA_MAX_MARKDOWN_CHARS]}"
+                    f"Contenido crudo:\n{ventana_markdown}"
                 ),
             },
         ],
     }
     headers = {"X-API-Key": settings.OLLAMA_API_KEY.strip(), "Content-Type": "application/json"}
     propio = cliente is None
-    http = cliente or httpx.AsyncClient(timeout=settings.OLLAMA_TIMEOUT_SEGUNDOS)
+    timeout_efectivo = min(float(settings.OLLAMA_TIMEOUT_SEGUNDOS), 45.0)
+    http = cliente or httpx.AsyncClient(timeout=timeout_efectivo)
     try:
         respuesta = await http.post(
             f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat", headers=headers, json=payload

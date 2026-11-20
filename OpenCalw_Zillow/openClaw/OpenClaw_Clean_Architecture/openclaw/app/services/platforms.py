@@ -103,7 +103,7 @@ _CITY_STATE_RE: Final[re.Pattern[str]] = re.compile(r"^([a-zA-Z .'-]+?)[,\s]+([a
 
 # Redfin exige ID numérico en /city/{id}/{ST}/{City}; sin él devuelve 404.
 _REDFIN_CITY_PATHS: Final[dict[str, str]] = {
-    "memphis, tn": "11797/TN/Memphis",
+    "memphis, tn": "11883/TN/Memphis",
     "cleveland, oh": "4243/OH/Cleveland",
     "detroit, mi": "5665/MI/Detroit",
     "flint, mi": "6683/MI/Flint",

@@ -57,7 +57,9 @@ def construir_decision(state: dict[str, Any], *, propiedad_id: UUID) -> Decision
     if cap_rate is None:
         cap_rate = state.get("cap_rate")
     capex = state.get("capex")
-    motivo = str(state.get("motivo_fallo") or state.get("estado") or "")[:MAX_MOTIVO]
+    motivo = str(
+        state.get("motivo_fallo") or state.get("motivo_financiero") or state.get("estado") or ""
+    )[:MAX_MOTIVO]
 
     detalle: dict[str, object] = {
         "estado": state.get("estado"),
