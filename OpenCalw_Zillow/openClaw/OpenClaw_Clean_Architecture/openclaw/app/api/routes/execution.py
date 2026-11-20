@@ -11,13 +11,18 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.config import settings
+from app.core.security import requiere_api_key
 
 logger = logging.getLogger("OpenClaw.Comandos")
 
-router = APIRouter(prefix="/v1/webhook", tags=["comandos"])
+router = APIRouter(
+    prefix="/v1/webhook",
+    tags=["comandos"],
+    dependencies=[Depends(requiere_api_key)],
+)
 
 
 @router.post("/telegram-comando", summary="Procesa un comando de Telegram")

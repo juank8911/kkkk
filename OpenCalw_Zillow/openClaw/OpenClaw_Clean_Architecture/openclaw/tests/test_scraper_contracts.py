@@ -321,3 +321,49 @@ async def test_legacy_scraper_facade_delegates_to_adapter(
     assert legacy["status"] == "exito"
     assert legacy["plataforma"] == "zillow"
     assert "1420 Maple Ave" in legacy["data"]["markdown"]
+
+    # Compatibilidad con worker que envía https://<spec.domain>
+    by_domain = await extraer_con_reintentos("https://zillow.com", "Cleveland OH", scraper=adapter)
+    assert by_domain["status"] == "exito"
+    assert by_domain["plataforma"] == "zillow"
+
+    # Rechaza dominios fuera del catálogo cerrado (prevención SSRF)
+    rejected = await extraer_con_reintentos(
+        "https://evil.example.com", "Cleveland OH", scraper=adapter
+    )
+    assert rejected["status"] == "invalid_platform"
+    assert rejected["error"]["code"] == "invalid_platform"
+
+
+async def test_sync_firecrawl_client_and_empty_markdown_retries(
+    fake_redis: fakeredis.aioredis.FakeRedis,
+    fake_clock: MutableClock,
+) -> None:
+    """Verifica compatibilidad con cliente Firecrawl síncrono y reintento ante markdown vacío."""
+
+    class SyncFakeFirecrawl:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def scrape_url(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+            self.calls += 1
+            if self.calls == 1:
+                return {"data": {"markdown": "   ", "metadata": {"statusCode": 200}}}
+            return load_cassette("realtor_success")["response"]
+
+    sync_client = SyncFakeFirecrawl()
+    limiter = SlidingWindowRateLimiter(redis_client=fake_redis, clock=fake_clock)
+    delays, sleep_fn = _make_sleep_recorder()
+    adapter = FirecrawlAdapter(
+        client=sync_client,
+        rate_limiter=limiter,
+        max_attempts=3,
+        base_backoff_seconds=0.25,
+        sleep_fn=sleep_fn,
+    )
+
+    result = await adapter.scrape("realtor", "Detroit MI")
+    assert result.ok is True
+    assert result.attempts == 2
+    assert delays == [0.25]
+    assert "8842 Oakwood Dr" in result.markdown

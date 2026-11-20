@@ -14,6 +14,23 @@ from fastapi.testclient import TestClient
 
 from app.api.main import app as openclaw_app
 from app.core.config import settings
+from app.core.security import CABECERA_API_KEY
+
+CLAVE_PRUEBA = "clave-tactica-de-prueba"
+
+
+@pytest.fixture(autouse=True)
+def entorno_test(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aisla cada prueba en entorno test con una API key conocida (S2-01)."""
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    monkeypatch.setattr(settings, "OPENCLAW_API_KEY", CLAVE_PRUEBA)
+    monkeypatch.setattr(settings, "OPENCLAW_API_KEY_SHA256", "")
+
+
+@pytest.fixture
+def auth_headers() -> dict[str, str]:
+    """Cabeceras validas para los endpoints protegidos."""
+    return {CABECERA_API_KEY: CLAVE_PRUEBA}
 
 
 class MutableClock:
@@ -35,9 +52,15 @@ def fake_clock() -> MutableClock:
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    """Cliente síncrono FastAPI para pruebas de rutas (Dev A) en entorno test."""
-    monkeypatch.setattr(settings, "APP_ENV", "test")
+def client(auth_headers: dict[str, str]) -> Iterator[TestClient]:
+    """Cliente síncrono FastAPI autenticado para pruebas de rutas (Dev A)."""
+    with TestClient(openclaw_app, headers=auth_headers) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def anon_client() -> Iterator[TestClient]:
+    """Cliente sin credenciales para las pruebas de seguridad."""
     with TestClient(openclaw_app) as test_client:
         yield test_client
 
@@ -52,11 +75,14 @@ async def fake_redis() -> AsyncIterator[fakeredis.aioredis.FakeRedis]:
 
 
 @pytest_asyncio.fixture
-async def api_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[httpx.AsyncClient]:
+async def api_client(auth_headers: dict[str, str]) -> AsyncIterator[httpx.AsyncClient]:
     """Cliente asíncrono httpx contra la aplicación principal OpenClaw."""
-    monkeypatch.setattr(settings, "APP_ENV", "test")
     transport = httpx.ASGITransport(app=openclaw_app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as async_client:
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers=auth_headers,
+    ) as async_client:
         yield async_client
 
 

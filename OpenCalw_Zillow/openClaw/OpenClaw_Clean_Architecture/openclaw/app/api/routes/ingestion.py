@@ -7,16 +7,21 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.config import settings
 from app.core.redis_client import redis_client
+from app.core.security import requiere_api_key
 from app.models.contracts import BarridoRequest, ErrorResponse, JobResponse, JobStatus
 from app.services.job_store import job_store
 
 logger = logging.getLogger("OpenClaw.Ingesta")
 
-router = APIRouter(prefix="/v1/openclaw", tags=["ingesta"])
+router = APIRouter(
+    prefix="/v1/openclaw",
+    tags=["ingesta"],
+    dependencies=[Depends(requiere_api_key)],
+)
 
 
 @router.post(

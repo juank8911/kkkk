@@ -94,7 +94,9 @@ class FirecrawlAdapter:
             from firecrawl import FirecrawlApp  # Lazy import para entornos sin firecrawl-py
 
             if not self._api_key:
-                raise RuntimeError("Se requiere FIRECRAWL_API_KEY o un cliente Firecrawl inyectado.")
+                raise RuntimeError(
+                    "Se requiere FIRECRAWL_API_KEY o un cliente Firecrawl inyectado."
+                )
             self._client = FirecrawlApp(api_key=self._api_key)
         return self._client
 
@@ -352,7 +354,8 @@ def _elapsed_ms(started: float) -> float:
 
 def _extract_response_payload(raw: Any) -> tuple[str, dict[str, Any], int | None]:
     if isinstance(raw, dict):
-        data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+        nested = raw.get("data")
+        data: dict[str, Any] = nested if isinstance(nested, dict) else raw
         markdown = str(data.get("markdown") or raw.get("markdown") or "")
         metadata = dict(data.get("metadata") or raw.get("metadata") or {})
         http_status = _coerce_int(
@@ -375,16 +378,16 @@ def _extract_response_payload(raw: Any) -> tuple[str, dict[str, Any], int | None
 
 
 def _extract_http_status(exc: Exception) -> int | None:
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code
+    response = getattr(exc, "response", None)
+    if response is not None:
+        coerced_response = _coerce_int(getattr(response, "status_code", None))
+        if coerced_response is not None:
+            return coerced_response
     for attr in ("status_code", "statusCode", "http_status"):
         val = getattr(exc, attr, None)
         coerced = _coerce_int(val)
         if coerced is not None:
             return coerced
-    response = getattr(exc, "response", None)
-    if response is not None:
-        return _coerce_int(getattr(response, "status_code", None))
     return None
 
 

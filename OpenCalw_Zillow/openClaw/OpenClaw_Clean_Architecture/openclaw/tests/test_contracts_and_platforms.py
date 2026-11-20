@@ -86,7 +86,9 @@ def test_validate_platforms_normalizes_and_deduplicates() -> None:
     assert result == ["zillow", "realtor", "redfin"]
 
 
-@pytest.mark.parametrize("bad_key", ["idealista", "https://www.zillow.com", "http://169.254.169.254"])
+@pytest.mark.parametrize(
+    "bad_key", ["idealista", "https://www.zillow.com", "http://169.254.169.254"]
+)
 def test_validate_platforms_rejects_unknown_or_raw_url_with_valid_list(bad_key: str) -> None:
     with pytest.raises(InvalidPlatformError) as exc_info:
         validate_platforms(["zillow", bad_key])
