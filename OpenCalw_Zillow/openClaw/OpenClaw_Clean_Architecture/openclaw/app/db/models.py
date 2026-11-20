@@ -71,7 +71,13 @@ class Propiedad(Base):
     plataforma: Mapped[str] = mapped_column(String(40), nullable=False)
     url_origen: Mapped[str] = mapped_column(Text, nullable=False)
     ubicacion: Mapped[str] = mapped_column(Text, nullable=False)
+    direccion_normalizada: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ciudad: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    codigo_postal: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
     condado: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    fuente_ubicacion: Mapped[str] = mapped_column(String(80), nullable=False, default="anuncio")
+    confianza_ubicacion: Mapped[str] = mapped_column(String(30), nullable=False, default="anuncio")
+    datos_oraculo: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     precio_usd: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     ingreso_anual_estimado: Mapped[float] = mapped_column(
         Numeric(14, 2), nullable=False, default=0

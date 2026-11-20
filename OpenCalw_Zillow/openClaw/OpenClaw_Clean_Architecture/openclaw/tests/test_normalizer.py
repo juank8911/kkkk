@@ -192,3 +192,23 @@ def test_negative_price_and_short_description_rejected() -> None:
     )
     assert prop.latitud is None
     assert prop.longitud is None
+
+
+def test_location_fields_come_from_listing_address() -> None:
+    markdown = (
+        "# 1200 Euclid Ave, Cleveland, OH 44106\n"
+        "Price: $125,000\n"
+        "County: Cuyahoga\n"
+        "Description:\nA valid listing with address-level location data."
+    )
+
+    prop = normalizar_propiedad_unica(
+        markdown,
+        plataforma="zillow",
+        url_origen="https://www.zillow.com/location-fields",
+    )
+
+    assert prop.ubicacion == "1200 Euclid Ave, Cleveland, OH 44106"
+    assert prop.ciudad == "Cleveland"
+    assert prop.codigo_postal == "44106"
+    assert prop.fuente_ubicacion == "anuncio"

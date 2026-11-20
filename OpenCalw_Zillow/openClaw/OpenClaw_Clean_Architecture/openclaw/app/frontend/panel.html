@@ -188,6 +188,8 @@
 
         <h2 style="margin-top: 16px;">Telemetría en vivo</h2>
         <ul id="telemetry-log"></ul>
+        <h2 style="margin-top: 16px;">Oráculo geoespacial</h2>
+        <pre id="oracle-status">Cargando estado del Oráculo...</pre>
       </section>
     </div>
 
@@ -446,6 +448,18 @@
       }
     }
 
+    async function loadOracleTelemetry() {
+      try {
+        const resp = await fetch("/panel/api/oraculo");
+        const data = await resp.json();
+        document.getElementById("oracle-status").textContent = JSON.stringify(data, null, 2);
+        if (!resp.ok) appendTelemetry(`Error consultando telemetría del Oráculo: HTTP ${resp.status}`);
+      } catch (err) {
+        document.getElementById("oracle-status").textContent = `Error: ${err}`;
+        appendTelemetry(`Error cargando Oráculo: ${err}`);
+      }
+    }
+
     async function loadJobDetail(jobId) {
       const detailEl = document.getElementById("job-detail");
       if (!jobId) {
@@ -534,7 +548,9 @@
 
     loadMarkets();
     loadRecentJobs();
+    loadOracleTelemetry();
     setInterval(loadRecentJobs, 15000);
+    setInterval(loadOracleTelemetry, 30000);
   </script>
 </body>
 </html>
