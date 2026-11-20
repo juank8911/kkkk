@@ -1,0 +1,43 @@
+groups:
+  - name: openclaw_slo_alerts
+    interval: 30s
+    rules:
+      - alert: OpenClawHighPipelineLatencyP95
+        expr: histogram_quantile(0.95, sum by (le) (rate(openclaw_pipeline_stage_duration_seconds_bucket[5m]))) > 15
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Latencia p95 del pipeline OpenClaw superior a 15s"
+          description: "El percentil 95 supera el SLO operativo de 15s durante más de 5 minutos."
+
+      - alert: OpenClawDlqDepthNonZero
+        expr: max(openclaw_dlq_depth) > 0
+        for: 2m
+        labels:
+          severity: critical
+          component: dlq
+        annotations:
+          summary: "Mensajes acumulados en DLQ de OpenClaw"
+          description: "Existen mensajes en openclaw_scraping_dlq u openclaw_decisiones_dlq que requieren inspección."
+
+      - alert: OpenClawSourceFailureSpike
+        expr: sum by (platform) (rate(openclaw_source_failures_total[5m])) > 0.2
+        for: 3m
+        labels:
+          severity: warning
+          component: scraper
+        annotations:
+          summary: "Aumento sostenido de fallos en fuente externa"
+          description: "La plataforma {{ $labels.platform }} presenta tasa elevada de fallos o bloqueos."
+
+      - alert: OpenClawDecisionErrorRateHigh
+        expr: sum(rate(openclaw_decisions_total{veredicto="error"}[10m])) / clamp_min(sum(rate(openclaw_decisions_total[10m])), 1) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: orchestrator
+        annotations:
+          summary: "Más del 5% de decisiones del grafo terminan en estado error"
+          description: "Revisar nodos de visión/financiero/legal y DLQ de decisiones."

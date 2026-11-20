@@ -9,7 +9,12 @@ from app.core.config import settings
 from app.core.redis_client import redis_client
 from app.db.base import obtener_sessionmaker
 from app.db.uow import UnidadDeTrabajo
-from app.services.offer_tracker import OfertaTrackerPort, ScraperOfertaTracker, rastrear_oferta
+from app.services.offer_tracker import (
+    FirecrawlOfertaTrackerAdapter,
+    OfertaTrackerPort,
+    OfertaResponse,
+    rastrear_oferta_con_lock,
+)
 from app.services.scraper import build_default_scraper
 
 logger = logging.getLogger("OpenClaw.OfferTrackerWorker")
@@ -25,8 +30,24 @@ async def ejecutar_ciclo(tracker: OfertaTrackerPort, *, limite: int | None = Non
         procesadas = 0
         for oferta, propiedad in activas:
             try:
-                await rastrear_oferta(unidad, oferta, propiedad, tracker)
-                procesadas += 1
+                contrato = OfertaResponse.model_validate(oferta)
+                evaluacion = await rastrear_oferta_con_lock(
+                    redis_client=redis_client,
+                    tracker=tracker,
+                    oferta=contrato,
+                    plataforma=propiedad.plataforma,
+                    referencia_busqueda=propiedad.url_origen,
+                    periodo_segundos=settings.OFERTA_TRACKER_INTERVAL_SEGUNDOS,
+                    lock_ttl_segundos=settings.OFERTA_TRACKER_LOCK_TTL_SEGUNDOS,
+                )
+                if evaluacion is not None:
+                    await unidad.ofertas.registrar_senal(
+                        oferta,
+                        senal=evaluacion.senal_detectada.value,
+                        notas=evaluacion.motivo,
+                    )
+                    await unidad.confirmar()
+                    procesadas += 1
             except Exception as exc:  # noqa: BLE001 - una oferta no detiene el lote
                 await unidad.revertir()
                 try:
@@ -50,7 +71,7 @@ async def ejecutar_ciclo(tracker: OfertaTrackerPort, *, limite: int | None = Non
 
 async def consumir_tracker() -> None:
     logger.info("offer_tracker_inicio", extra={"intervalo": settings.OFERTA_TRACKER_INTERVAL_SEGUNDOS})
-    tracker = ScraperOfertaTracker(build_default_scraper())
+    tracker = FirecrawlOfertaTrackerAdapter(build_default_scraper())
     while True:
         try:
             total = await ejecutar_ciclo(tracker)
