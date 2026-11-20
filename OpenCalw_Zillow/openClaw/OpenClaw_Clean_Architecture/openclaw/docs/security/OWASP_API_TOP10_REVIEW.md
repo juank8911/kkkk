@@ -20,5 +20,6 @@
 | **API10:2023 — Unsafe Consumption of APIs** | Llamadas a Firecrawl, UAO y Telegram sin timeouts, sin validación de respuesta y con `requests` bloqueante. | Adaptadores aislados detrás de puertos (`ScraperPort`, `UaoLiquidityPort`, `NotifierPort`) con timeouts estrictos, backoff acotado, circuit breaker, buffer de reintento y validación de respuestas. | `app/integrations/firecrawl_adapter.py`, `app/integrations/uao_client.py`, `app/orchestrator/nodes/telegram_alert.py` | **Cerrado** |
 
 ## Notas de seguimiento antes de producción real
-1. Rotación trimestral de `OPENCLAW_API_KEY` y `TG_WEBHOOK_SECRET` documentada en el runbook operativo (`S6-03`).
+1. Rotación trimestral de `OPENCLAW_API_KEY` / `OPENCLAW_API_KEY_SHA256` y `TG_WEBHOOK_SECRET` documentada en el runbook operativo (`S6-03`).
 2. Habilitación de fondos reales fuera de `BUY_MODE=sandbox` permanece **bloqueada** hasta auditoría legal, KYC/AML y control de custodia externa.
+3. Controles adicionales verificados al cierre de Sprints 2–6: unidad de trabajo transaccional por propiedad (`S2-03`), webhook Telegram con `X-Telegram-Bot-Api-Secret-Token` + allowlist + dedupe `update_id` (`S2-05`), `XAUTOCLAIM`/DLQ/semáforo por dominio (`S3-01..S3-04`), DLQ de nodos LangGraph (`S4-03`), prueba de carga de 100 jobs (`S5-06`) y demo de aceptación de 8 criterios (`S6-06`).
