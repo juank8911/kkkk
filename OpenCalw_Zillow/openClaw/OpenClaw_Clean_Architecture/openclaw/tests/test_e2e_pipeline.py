@@ -65,9 +65,14 @@ async def test_s5_05_e2e_sweep_completes_without_intervention(
     monkeypatch.setattr(ingestion_route, "redis_client", fake_redis)
     monkeypatch.setattr(job_store_module, "redis_client", fake_redis)
     monkeypatch.setattr(settings, "APP_ENV", "test")
+    monkeypatch.setattr(settings, "OPENCLAW_API_KEY", "e2e-tactical-key")
+    monkeypatch.setattr(settings, "OPENCLAW_API_KEY_SHA256", "")
+    auth_headers = {"X-OpenClaw-Tactical-Key": "e2e-tactical-key"}
 
     transport = httpx.ASGITransport(app=openclaw_app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver", headers=auth_headers
+    ) as client:
         # 1. Crear barrido vía API real
         create_resp = await client.post(
             "/v1/openclaw/barridos",

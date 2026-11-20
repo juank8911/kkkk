@@ -36,14 +36,19 @@ def _respuesta(
     code: str,
     message: str,
     details: list[ErrorDetail] | dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     cuerpo = ErrorResponse(code=code, message=message, details=details)
-    return JSONResponse(status_code=status_code, content=cuerpo.model_dump(mode="json"))
+    return JSONResponse(
+        status_code=status_code,
+        content=cuerpo.model_dump(mode="json"),
+        headers=headers,
+    )
 
 
 async def _http_exception_handler(_: Request, exc: StarletteHTTPException) -> JSONResponse:
     codigo = _CODIGOS.get(exc.status_code, "error")
-    return _respuesta(exc.status_code, codigo, str(exc.detail))
+    return _respuesta(exc.status_code, codigo, str(exc.detail), headers=exc.headers)
 
 
 async def _validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
