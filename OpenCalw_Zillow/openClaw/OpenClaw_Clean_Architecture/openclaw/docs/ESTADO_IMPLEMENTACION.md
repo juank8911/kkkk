@@ -253,7 +253,30 @@ análisis estático y el CI queda como puerta de calidad.
 - Configuración: `OFERTA_TRACKER_INTERVAL_SEGUNDOS`,
   `OFERTA_TRACKER_LOCK_TTL_SEGUNDOS` y `OFERTA_TRACKER_MAX_OFERTAS_LOTE`.
 
+## Plan de fases faltantes 95–117 — Bloque Dev 2 (completado en `dev2`)
+
+Todas las entregas de dominio, IA, observabilidad, documentación legal y contratos
+sandbox asignadas a Dev 2 en `PLAN_IMPLEMENTACION_FASES_FALTANTES_2DEVS.md` quedaron
+implementadas, probadas y publicadas en `dev2`:
+
+| Fase | Entregables Dev 2 | Estado | Pruebas |
+|---|---|---|---|
+| **95** | `app/services/offer_tracker.py` (`OfertaTrackerPort`, `FirecrawlOfertaTrackerAdapter`, lock Redis con token verificable, señales explícitas vs ambiguas) | Hecho en `dev2` | `tests/test_fase95_offer_tracker.py` (10 casos) |
+| **96** | `app/services/macro_strategist.py` (`MacroDataPort`, `StaticMacroAdapter`, allowlist `fred`/`bls`/`census`/`fhfa`, reglas deterministas, fallback, aprobación humana obligatoria) | Hecho en `dev2` | `tests/test_fase96_macro_strategist.py` (3 casos) |
+| **97** | `app/services/legal_public_records.py` (`PublicRecordPort`, `CountyTaxAssessorAdapter`, allowlist HTTPS, hash SHA-256, 4 estados y `LEGAL_DISCLAIMER`) | Hecho en `dev2` | `tests/test_fase97_legal_records.py` (2 casos) |
+| **98/102** | `app/services/loi_generator.py` (plantillas OH/FL/MI/TX con `legal_reviewed`, PDF 1.4 determinista, versionado inmutable, `NON_BINDING_DISCLAIMER`, sin envío automático) | Hecho en `dev2` | `tests/test_fase98_loi_pdf.py` (2 casos) |
+| **100** | `deploy/observability/grafana_dashboard_openclaw.json`, `deploy/observability/prometheus_alerts_openclaw.yml`, `docs/SLOS_Y_ALERTAS_F100.md`, `app/services/slo_evaluator.py` | Hecho en `dev2` | `tests/test_fase100_observability_slos.py` (2 casos) |
+| **101/104** | `app/services/negotiation_assistant.py` (extracción comercial sin atributos protegidos Fair Housing, alternativas explicables, umbral de confianza + fallback manual, integración con borrador LOI) | Hecho en `dev2` | `tests/test_fase101_negotiator.py` (2 casos) |
+| **105–111 / 116–117** | `docs/adr/ADR-06-reconciliacion-fases-105-111.md`, `app/services/source_health.py` (`PlatformSourceHealthManager`, cooldown, fuentes alternativas, cero evasión WAF/CAPTCHA) | Hecho en `dev2` | `tests/test_fase105_111_source_health.py` (2 casos) |
+| **99/103** | `app/services/escrow_sandbox.py` (solo `disabled`/`sandbox`, `FakeEscrowProvider`, doble aprobación 4-eyes, idempotencia, conciliación), `docs/legal/ESCROW_COMPLIANCE_F99_103.md` | Sandbox/G2 en `dev2` | `tests/test_fase99_escrow_sandbox.py` (2 casos) |
+| **112–114** | `app/services/compliance_gates.py` (contratos TCPA/DNC, KYC/KYB/OFAC, fraude/reversión, kill switch y puerta G2 sin acciones externas), `docs/legal/PUERTA_G2_FASES_112_114.md` | Bloqueado/G2 en `dev2` | `tests/test_fase112_114_compliance_gates.py` (2 casos) |
+| **115** | `app/services/geospatial_oracle.py` (modo `disabled` por defecto hasta G2, prohibición estricta de proxies Fair Housing/ECOA, score explicable informativo y auditoría de estabilidad/disparidad), `docs/legal/F115_SESGOS_Y_LICENCIAS.md` | Disabled/G2 en `dev2` | `tests/test_fase115_geospatial_oracle.py` (4 casos) |
+
+### Verificación completa en `dev2`
+
+- `pytest --cov=app -q`: **256 passed, 3 skipped** (pruebas en vivo opcionales), **89 % de cobertura** sobre 4 303 sentencias.
+- `ruff check`, `black --check` y `mypy --follow-imports=silent --explicit-package-bases`: **0 errores** en todos los módulos y pruebas de Dev 2.
+
 ## Siguiente corte
-1. Fase 96: estratega macro con parámetros versionados y scheduler seguro.
-2. Fase 97: auditoría legal ampliada con fuentes de registros públicos.
-3. Fase 100: matriz de despliegue productivo extendida.
+1. Dev 1: integración de endpoints/persistencia/scheduler para fases 96, 97, 98/102, 100, 101/104, 110–111 y 115.
+2. Puerta legal G2: dictamen firmado y auditoría externa antes de activar cualquier módulo financiero real, SMS/outreach o scoring geoespacial (fases 99/103, 112–114 y 115).
