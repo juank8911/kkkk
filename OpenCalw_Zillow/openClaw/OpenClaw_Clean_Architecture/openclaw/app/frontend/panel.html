@@ -431,6 +431,21 @@
       }
     }
 
+    async function loadRecentJobs() {
+      try {
+        const resp = await fetch("/panel/api/barridos?limit=50");
+        const data = await resp.json();
+        if (resp.ok && Array.isArray(data)) {
+          for (const job of data) {
+            if (job.job_id) jobsMap.set(job.job_id, job);
+          }
+          renderJobsTable();
+        }
+      } catch (err) {
+        appendTelemetry(`Error cargando jobs automáticos: ${err}`);
+      }
+    }
+
     async function loadJobDetail(jobId) {
       const detailEl = document.getElementById("job-detail");
       if (!jobId) {
@@ -518,6 +533,8 @@
     document.getElementById("btn-connect-ws").addEventListener("click", connectTelemetryWs);
 
     loadMarkets();
+    loadRecentJobs();
+    setInterval(loadRecentJobs, 15000);
   </script>
 </body>
 </html>

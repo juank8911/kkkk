@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 from fastapi.responses import HTMLResponse
 
 from app.api.routes import ingestion
+from app.core.redis_client import redis_client
 from app.frontend.markets import MercadoAtractivo, listar_mercados_ordenados
 from app.models.contracts import BarridoRequest, JobResponse
 
@@ -32,6 +33,30 @@ async def servir_panel_jobs() -> HTMLResponse:
 async def listar_mercados_panel() -> list[MercadoAtractivo]:
     """Devuelve el ranking de mercados calculado por rendimiento, precio, renta y factores."""
     return listar_mercados_ordenados()
+
+
+@router.get(
+    "/panel/api/barridos",
+    response_model=list[JobResponse],
+    summary="Lista los jobs recientes para el panel",
+)
+async def listar_barridos_panel(
+    limit: int = Query(default=50, ge=1, le=100),
+) -> list[JobResponse]:
+    """Carga jobs automáticos y manuales desde Redis sin exponer secretos."""
+    jobs: list[JobResponse] = []
+    async for clave in redis_client.scan_iter(match="openclaw:job:*", count=100):
+        crudo = await redis_client.get(clave)
+        if crudo is None:
+            continue
+        if isinstance(crudo, bytes):
+            crudo = crudo.decode("utf-8")
+        try:
+            jobs.append(JobResponse.model_validate_json(crudo))
+        except ValueError:
+            continue
+    jobs.sort(key=lambda job: job.created_at, reverse=True)
+    return jobs[:limit]
 
 
 @router.post(
