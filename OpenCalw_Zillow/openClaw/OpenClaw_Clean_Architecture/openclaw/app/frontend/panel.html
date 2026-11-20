@@ -58,6 +58,19 @@
       padding: 4px 8px;
       font-size: 0.78rem;
     }
+    button.btn-icon-props {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      font-size: 0.78rem;
+      background: #0f172a;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+    }
+    button.btn-icon-props:hover {
+      background: rgba(56, 189, 248, 0.16);
+    }
     .grid {
       display: grid;
       grid-template-columns: 1.2fr 1fr;
@@ -98,6 +111,10 @@
     .status-completed { background: #15803d; }
     .status-partial { background: #b45309; }
     .status-failed { background: #b91c1c; }
+    .prop-enviada_aprobacion { background: #15803d; color: #f0fdf4; }
+    .prop-rechazada_directamente { background: #b91c1c; color: #fef2f2; }
+    .prop-error_analisis { background: #b45309; color: #fffbeb; }
+    .prop-pendiente_analisis { background: #475569; color: #f8fafc; }
     .score-high { background: #15803d; color: #f0fdf4; }
     .score-mid { background: #0369a1; color: #f0f9ff; }
     .score-low { background: #b45309; color: #fffbeb; }
@@ -138,6 +155,64 @@
       font-size: 0.8rem;
     }
     #telemetry-log li { padding: 4px 0; border-bottom: 1px solid #1e293b; color: var(--muted); }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-dialog {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: min(1100px, 100%);
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
+      gap: 12px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .modal-body {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .kpi-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .kpi-tab {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+    }
+    .kpi-tab.active {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.16);
+      color: var(--accent);
+    }
+    .prop-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.8rem;
+    }
+    .prop-link:hover { text-decoration: underline; }
     @media (max-width: 900px) {
       .grid { grid-template-columns: 1fr; }
       select#market-selector { min-width: 220px; width: 100%; }
@@ -169,17 +244,20 @@
           <input id="lookup-job-id" type="text" placeholder="Consultar job_id (UUID)" style="flex:1;" />
           <button id="btn-lookup-job" type="button">Ver detalle</button>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Job ID</th>
-              <th>Estado</th>
-              <th>Consulta</th>
-              <th>Plataformas</th>
-            </tr>
-          </thead>
-          <tbody id="jobs-tbody"></tbody>
-        </table>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job ID</th>
+                <th>Estado</th>
+                <th>Consulta</th>
+                <th>Plataformas</th>
+                <th>Propiedades</th>
+              </tr>
+            </thead>
+            <tbody id="jobs-tbody"></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="panel" aria-label="Detalle del job seleccionado">
@@ -228,10 +306,43 @@
     </section>
   </main>
 
+  <div id="job-properties-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="job-properties-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h2 id="job-properties-title" style="margin-bottom: 4px;">Propiedades del barrido</h2>
+          <div id="job-properties-subtitle" class="muted"></div>
+        </div>
+        <button id="btn-close-properties-modal" type="button" class="btn-secondary" aria-label="Cerrar visor de propiedades">Cerrar ✕</button>
+      </div>
+
+      <div id="job-properties-tabs" class="kpi-tabs" role="tablist" aria-label="Filtro por estado de análisis"></div>
+      <div id="job-properties-status" class="muted"></div>
+
+      <div class="modal-body table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Estado de análisis</th>
+              <th>Propiedad</th>
+              <th>Plataforma</th>
+              <th>Precio</th>
+              <th>Cap Rate / CAPEX</th>
+              <th>Motivo / Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="job-properties-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script>
     const jobsMap = new Map();
     let marketsList = [];
     let selectedMarketQuery = "";
+    let currentSweepProperties = null;
+    let activePropertiesFilter = "all";
     let wsConnection = null;
     const MAX_EVENTS = 100;
 
@@ -245,10 +356,38 @@
       return minUsd === maxUsd ? fmt(minUsd) : `${fmt(minUsd)}–${fmt(maxUsd)}`;
     }
 
+    function formatUsd(val) {
+      if (val === null || val === undefined || Number.isNaN(Number(val))) return "—";
+      return `$${Math.round(Number(val)).toLocaleString("en-US")}`;
+    }
+
     function scoreBadgeClass(pct) {
       if (pct >= 60) return "score-high";
       if (pct >= 45) return "score-mid";
       return "score-low";
+    }
+
+    function createHouseListIcon() {
+      const svgNS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(svgNS, "svg");
+      svg.setAttribute("width", "14");
+      svg.setAttribute("height", "14");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "2");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      svg.setAttribute("aria-hidden", "true");
+
+      const pathRoof = document.createElementNS(svgNS, "path");
+      pathRoof.setAttribute("d", "M3 10.5L12 3l9 7.5");
+      const pathBody = document.createElementNS(svgNS, "path");
+      pathBody.setAttribute("d", "M5 9.5V20h14V9.5");
+      const pathDoor = document.createElementNS(svgNS, "path");
+      pathDoor.setAttribute("d", "M9 20v-6h6v6");
+      svg.append(pathRoof, pathBody, pathDoor);
+      return svg;
     }
 
     function updateSelectedMarketSummary(market) {
@@ -404,6 +543,152 @@
       }
     }
 
+    function renderSweepPropertiesTabs() {
+      const tabsEl = document.getElementById("job-properties-tabs");
+      tabsEl.replaceChildren();
+      if (!currentSweepProperties) return;
+      const r = currentSweepProperties.resumen;
+      const defs = [
+        { key: "all", label: `Todas (${r.total})` },
+        { key: "enviada_aprobacion", label: `Enviadas a aprobación (${r.enviadas_aprobacion})` },
+        { key: "rechazada_directamente", label: `Rechazadas directamente (${r.rechazadas_directamente})` },
+        { key: "pendiente_analisis", label: `Pendientes (${r.pendientes_analisis})` },
+        { key: "error_analisis", label: `Con error (${r.errores_analisis})` },
+      ];
+      for (const def of defs) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = def.key === activePropertiesFilter ? "kpi-tab active" : "kpi-tab";
+        btn.textContent = def.label;
+        btn.addEventListener("click", () => {
+          activePropertiesFilter = def.key;
+          renderSweepPropertiesTabs();
+          renderSweepPropertiesTable();
+        });
+        tabsEl.appendChild(btn);
+      }
+    }
+
+    function renderSweepPropertiesTable() {
+      const tbody = document.getElementById("job-properties-tbody");
+      const statusEl = document.getElementById("job-properties-status");
+      tbody.replaceChildren();
+      if (!currentSweepProperties) return;
+
+      const todas = currentSweepProperties.propiedades || [];
+      const filtradas = activePropertiesFilter === "all"
+        ? todas
+        : todas.filter((p) => p.estado_analisis === activePropertiesFilter);
+
+      if (todas.length === 0) {
+        statusEl.textContent = "Este barrido aún no tiene propiedades persistidas en PostgreSQL.";
+        return;
+      }
+      statusEl.textContent =
+        `Mostrando ${filtradas.length} de ${todas.length} propiedades · ` +
+        `Analizadas: ${currentSweepProperties.resumen.analizadas} · ` +
+        `Enviadas a aprobación: ${currentSweepProperties.resumen.enviadas_aprobacion} · ` +
+        `Rechazadas directamente: ${currentSweepProperties.resumen.rechazadas_directamente}`;
+
+      for (const prop of filtradas) {
+        const tr = document.createElement("tr");
+
+        const tdEstado = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = `badge prop-${prop.estado_analisis}`;
+        badge.textContent = prop.etiqueta_estado;
+        tdEstado.appendChild(badge);
+
+        const sub = document.createElement("div");
+        sub.className = "muted";
+        const partesSub = [];
+        if (prop.veredicto) partesSub.push(`veredicto: ${prop.veredicto}`);
+        if (prop.alerta_telegram_enviada) partesSub.push("Telegram enviado");
+        sub.textContent = partesSub.join(" · ");
+        if (partesSub.length > 0) tdEstado.appendChild(sub);
+
+        const tdProp = document.createElement("td");
+        const titleDiv = document.createElement("div");
+        titleDiv.textContent = prop.ubicacion;
+        tdProp.appendChild(titleDiv);
+
+        const locParts = [prop.ciudad, prop.codigo_postal].filter(Boolean);
+        if (locParts.length > 0) {
+          const locDiv = document.createElement("div");
+          locDiv.className = "muted";
+          locDiv.textContent = locParts.join(", ");
+          tdProp.appendChild(locDiv);
+        }
+
+        if (prop.url_origen && (prop.url_origen.startsWith("https://") || prop.url_origen.startsWith("http://"))) {
+          const link = document.createElement("a");
+          link.className = "prop-link";
+          link.href = prop.url_origen;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Ver anuncio";
+          tdProp.appendChild(link);
+        }
+
+        const tdPlat = document.createElement("td");
+        tdPlat.textContent = prop.plataforma;
+
+        const tdPrecio = document.createElement("td");
+        tdPrecio.textContent = formatUsd(prop.precio_usd);
+
+        const tdMetrics = document.createElement("td");
+        const capTxt = prop.cap_rate_pct !== null && prop.cap_rate_pct !== undefined
+          ? `${Number(prop.cap_rate_pct).toFixed(2)}%`
+          : "—";
+        const capexTxt = prop.capex_estimado !== null && prop.capex_estimado !== undefined
+          ? formatUsd(prop.capex_estimado)
+          : "—";
+        tdMetrics.textContent = `Cap: ${capTxt} · CAPEX: ${capexTxt}`;
+
+        const tdMotivo = document.createElement("td");
+        tdMotivo.className = "muted";
+        tdMotivo.textContent = prop.motivo || (prop.analizada ? "Evaluada sin observaciones adicionales" : "Pendiente de evaluación en orquestador");
+
+        tr.append(tdEstado, tdProp, tdPlat, tdPrecio, tdMetrics, tdMotivo);
+        tbody.appendChild(tr);
+      }
+    }
+
+    function closeSweepPropertiesModal() {
+      document.getElementById("job-properties-modal").classList.remove("open");
+    }
+
+    async function openSweepProperties(job) {
+      const modal = document.getElementById("job-properties-modal");
+      const titleEl = document.getElementById("job-properties-title");
+      const subtitleEl = document.getElementById("job-properties-subtitle");
+      const statusEl = document.getElementById("job-properties-status");
+      const tbody = document.getElementById("job-properties-tbody");
+
+      titleEl.textContent = `Propiedades del barrido — ${job.query || job.job_id}`;
+      subtitleEl.textContent = `Job ID: ${job.job_id} · Estado: ${job.status || "desconocido"}`;
+      statusEl.textContent = "Cargando propiedades analizadas, enviadas a aprobación y rechazadas...";
+      tbody.replaceChildren();
+      document.getElementById("job-properties-tabs").replaceChildren();
+      activePropertiesFilter = "all";
+      currentSweepProperties = null;
+      modal.classList.add("open");
+
+      try {
+        const resp = await fetch(`/panel/api/barridos/${encodeURIComponent(job.job_id)}/propiedades`);
+        const data = await resp.json().catch(() => ({ detail: "Respuesta no válida del servidor" }));
+        if (!resp.ok) {
+          statusEl.textContent = `Error ${resp.status}: ${data.detail || JSON.stringify(data)}`;
+          return;
+        }
+        currentSweepProperties = data;
+        renderSweepPropertiesTabs();
+        renderSweepPropertiesTable();
+      } catch (err) {
+        statusEl.textContent = `Error consultando propiedades del barrido: ${err}`;
+      }
+    }
+
     function renderJobsTable() {
       const tbody = document.getElementById("jobs-tbody");
       tbody.replaceChildren();
@@ -428,7 +713,23 @@
         const tdPlatforms = document.createElement("td");
         tdPlatforms.textContent = (job.plataformas || []).join(", ");
 
-        tr.append(tdId, tdStatus, tdQuery, tdPlatforms);
+        const tdProps = document.createElement("td");
+        const btnProps = document.createElement("button");
+        btnProps.type = "button";
+        btnProps.className = "btn-icon-props";
+        btnProps.title = "Ver propiedades analizadas, enviadas a aprobación y rechazadas";
+        btnProps.setAttribute("aria-label", `Ver propiedades del barrido ${job.query || job.job_id}`);
+        btnProps.appendChild(createHouseListIcon());
+        const lbl = document.createElement("span");
+        lbl.textContent = "Ver";
+        btnProps.appendChild(lbl);
+        btnProps.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openSweepProperties(job);
+        });
+        tdProps.appendChild(btnProps);
+
+        tr.append(tdId, tdStatus, tdQuery, tdPlatforms, tdProps);
         tbody.appendChild(tr);
       }
     }
@@ -545,6 +846,13 @@
       loadJobDetail(id);
     });
     document.getElementById("btn-connect-ws").addEventListener("click", connectTelemetryWs);
+    document.getElementById("btn-close-properties-modal").addEventListener("click", closeSweepPropertiesModal);
+    document.getElementById("job-properties-modal").addEventListener("click", (ev) => {
+      if (ev.target === ev.currentTarget) closeSweepPropertiesModal();
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") closeSweepPropertiesModal();
+    });
 
     loadMarkets();
     loadRecentJobs();
