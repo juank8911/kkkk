@@ -26,7 +26,7 @@ _YEAR_LABEL_RE: Final[re.Pattern[str]] = re.compile(
     r"(1[89]\d{2}|20[0-2]\d)\b"
 )
 _HOA_NONE_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?i)(?:hoa(?:\s+fee|\s+dues)?|cuota\s+hoa)\s*:?\s*(?:none|no\s+hoa|n/a|\$?\s*0(?:\.00)?(?:/mo)?\b)"
+    r"(?i)(?:(?:hoa(?:\s+fee|\s+dues)?|cuota\s+hoa)\s*:?\s*(?:none|no\s+hoa|n/a|\$?\s*0(?:\.00)?(?:/mo)?\b)|\b(?:no|sin)\s+hoa\b)"
 )
 _HOA_RE: Final[re.Pattern[str]] = re.compile(
     r"(?i)(?:hoa(?:\s+fee|\s+dues)?|cuota\s+hoa)\s*:?\s*\$\s*([\d,]+(?:\.\d+)?)"

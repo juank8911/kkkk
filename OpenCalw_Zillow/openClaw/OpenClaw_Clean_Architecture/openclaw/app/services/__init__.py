@@ -18,6 +18,7 @@ from app.services.buy_service import (
 )
 from app.services.deduplicator import (
     DeduplicatedProperty,
+    buscar_duplicado_existente,
     calcular_similitud_direcciones,
     deduplicar_propiedades,
     generar_clave_deduplicacion,
@@ -88,6 +89,7 @@ __all__ = [
     "VALID_PLATFORM_KEYS",
     "adquirir_permiso_extraccion",
     "build_platform_url",
+    "buscar_duplicado_existente",
     "calcular_similitud_direcciones",
     "deduplicar_propiedades",
     "enriquecer_propiedad_desde_markdown",
