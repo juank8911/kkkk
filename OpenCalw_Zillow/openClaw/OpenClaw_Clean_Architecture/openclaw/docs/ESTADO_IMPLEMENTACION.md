@@ -118,8 +118,74 @@ Limitación del entorno: el intérprete de Python del equipo está bloqueado
 que `pytest` y `alembic` no se pudieron ejecutar aquí. La validación se apoya en
 análisis estático y el CI queda como puerta de calidad.
 
-## Siguiente corte
+## Sprint 3 (Dev 1)
 
-1. Sprint 3: consumer group con `XAUTOCLAIM`, reintentos y DLQ (S3-01).
-2. Idempotencia por `job_id` + plataforma (S3-02) y máquina de estados (S3-03).
-3. Conectar el worker a la unidad de trabajo para escribir en PostgreSQL.
+### S3-01 · Consumer group con `XAUTOCLAIM`, reintentos y DLQ
+- `app/workers/ingestion_worker.py` recupera los mensajes pendientes de
+  consumidores caídos con `XAUTOCLAIM` (inactividad mínima `CLAIM_IDLE_MS`) antes
+  de leer nuevos, de modo que una caída a mitad de proceso no pierde trabajo.
+- Cada mensaje acumula un contador de entregas en Redis
+  (`openclaw:entregas:<id>`). Mientras queden intentos, el mensaje **no** se
+  confirma: sigue pendiente y `XAUTOCLAIM` lo reentrega.
+- Al alcanzar `MAX_ENTREGAS` (3 por defecto) el mensaje se copia a la
+  dead-letter queue `openclaw_scraping_dlq` con el payload original, el motivo y
+  el número de entregas, y solo entonces se confirma para no atascar el grupo.
+- El bucle tolera caídas de Redis (`error_lectura_cola`) y crea el grupo con
+  `mkstream` tratando `BUSYGROUP` como caso normal.
+
+### S3-02 · Idempotencia por `job_id` y plataforma
+- `app/services/idempotency.py` reclama `openclaw:idem:<job_id>:<plataforma>` con
+  `SET NX EX` antes de raspar cada dominio. Si la clave ya existía, el trabajo se
+  marca como `omitido_idempotente` y no se vuelve a llamar al proveedor.
+- Reprocesar el mismo mensaje (por reentrega o por reintento) no duplica
+  propiedades ni consume cuota de Firecrawl.
+- `liberar()` permite un reintento legítimo tras un fallo controlado.
+
+### S3-03 · Máquina de estados del job
+- `app/workers/state_machine.py` declara las transiciones válidas:
+  `queued → running|failed`, `running → completed|partial|failed`,
+  `partial → running`, `failed → queued|running`; `completed` es terminal.
+- `aplicar_transicion()` valida antes de escribir y lanza `TransicionInvalida`
+  ante un salto ilegal, sin tocar el estado almacenado.
+- El worker ya no reabre jobs cerrados: si el mensaje llega con el job en estado
+  terminal se registra `job_ya_cerrado` y se descarta el trabajo.
+
+### S3-04 · Semáforo de concurrencia por dominio
+- `app/services/domain_semaphore.py` mantiene un `asyncio.Semaphore` por dominio
+  (`LIMITE_CONCURRENCIA_DOMINIO`, 2 por defecto), así que saturar Zillow no frena
+  a Redfin.
+- El worker envuelve la extracción en `async with semaforos.turno(spec.domain)`.
+- La cuota global contra el proveedor sigue en el rate limiter de Redis; el
+  semáforo solo evita ráfagas locales por dominio.
+
+### S3-06 · Geocodificación con caché
+- `app/services/geocoding.py` resuelve direcciones contra Nominatim con
+  `User-Agent` identificable y caché en Redis (`openclaw:geo:<sha256>` de la
+  dirección normalizada, TTL `GEOCODING_TTL_SEGUNDOS`).
+- Los negativos también se cachean para no repetir consultas inútiles; los fallos
+  transitorios de red **no** se cachean.
+- `geocodificar()` acepta un `httpx.AsyncClient` inyectado, lo que permite
+  probarla sin red.
+
+### Pruebas nuevas
+| Archivo | Cobertura |
+|---|---|
+| `tests/test_worker_queue.py` | reintentos sin confirmar, envío a DLQ, job cerrado, idempotencia por plataforma y recuperación de pendientes |
+| `tests/test_state_machine.py` | transiciones válidas, ilegales, job inexistente y reintento tras fallo |
+| `tests/test_idempotency.py` | primera reclamación, duplicados, plataformas distintas, liberar y TTL |
+| `tests/test_domain_semaphore.py` | límite 1 serializa, límite 2 paraleliza, dominios independientes |
+| `tests/test_geocoding.py` | caché positiva y negativa, error HTTP sin cachear, respuesta inválida |
+
+## Verificación del corte
+| Comprobación | Resultado |
+|---|---|
+| `pyright` (modo basic) sobre `app`, `tests`, `scripts` | 0 errores, 4 avisos (`redis.exceptions` sin resolver por no haber paquetes instalados) |
+| Rama `dev1` | `7f3de30` más el commit de S3-04/S3-06 |
+| `pytest` y `alembic` | No ejecutables en este equipo (intérprete de Python bloqueado) |
+
+## Siguiente corte
+1. Sprint 4: conectar el worker a la unidad de trabajo para escribir propiedades y
+   eventos en PostgreSQL (hoy el job vive solo en Redis).
+2. Sprint 5: panel de jobs y notificaciones de Telegram sobre los eventos ya
+   persistidos.
+3. Reintentar `git push` cuando haya red o conector de GitHub habilitado.

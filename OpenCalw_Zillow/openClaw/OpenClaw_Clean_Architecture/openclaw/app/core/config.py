@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     REDIS_STREAM_SCRAPING: str = "openclaw_scraping_queue"
     REDIS_CONSUMER_GROUP: str = "scrapers"
     REDIS_CONSUMER_NAME: str = "worker-1"
+    REDIS_STREAM_DLQ: str = "openclaw_scraping_dlq"
+    MAX_ENTREGAS: int = Field(default=3, ge=1, le=20)
+    CLAIM_IDLE_MS: int = Field(default=60000, ge=1000)
+    IDEMPOTENCIA_TTL_SEGUNDOS: int = Field(default=86400, ge=60)
+    LIMITE_CONCURRENCIA_DOMINIO: int = Field(default=2, ge=1, le=10)
+    GEOCODING_URL: str = "https://nominatim.openstreetmap.org/search"
+    GEOCODING_USER_AGENT: str = "OpenClaw/0.2 (+dev1@openclaw.local)"
+    GEOCODING_TTL_SEGUNDOS: int = Field(default=2592000, ge=3600)
 
     FIRECRAWL_API_KEY: str = ""
     OPENCLAW_API_KEY: str = ""
