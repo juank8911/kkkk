@@ -23,15 +23,19 @@ from typing import Any
 from uuid import UUID
 
 from redis.exceptions import ResponseError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 from app.core.logging import configure_logging, job_context
 from app.core.redis_client import redis_client
+from app.db.models import Job
+from app.db.uow import unidad_de_trabajo
 from app.models.contracts import JobStatus
 from app.services import idempotency
 from app.services.domain_semaphore import semaforos
 from app.services.platforms import InvalidPlatformError, get_platform_spec
 from app.services.scraper import extraer_con_reintentos
+from app.services.ingestion_pipeline import procesar_lote_extraccion_con_uow
 from app.workers.state_machine import TransicionInvalida, aplicar_transicion
 
 logger = logging.getLogger("OpenClaw.Worker")
@@ -96,6 +100,52 @@ async def _extraer_plataforma(clave: str, query: str, job_id: UUID | None) -> di
     return {"plataforma": clave, **resultado}
 
 
+async def _persistir_resultado(
+    job_id: UUID,
+    resultado: dict[str, Any],
+    *,
+    query: str,
+    plataformas: list[str],
+) -> dict[str, Any]:
+    """Persiste los anuncios extraídos; un job exitoso no queda solo en Redis."""
+    if resultado.get("status") != "exito":
+        return resultado
+    data = resultado.get("data") or {}
+    markdown = str(data.get("markdown") or "").strip()
+    if not markdown:
+        return {**resultado, "persistencia": {"persistidas": 0, "motivo": "markdown_vacio"}}
+
+    try:
+        async with unidad_de_trabajo() as unidad:
+            if await unidad.jobs.obtener(job_id) is None:
+                await unidad.jobs.crear(
+                    Job(
+                        job_id=job_id,
+                        status=JobStatus.RUNNING.value,
+                        query=query[:200],
+                        plataformas=plataformas,
+                    )
+                )
+            summary = await procesar_lote_extraccion_con_uow(
+                unidad,
+                job_id=job_id,
+                plataforma=str(resultado.get("plataforma") or "desconocida"),
+                markdown=markdown,
+                url_origen=resultado.get("dominio"),
+            )
+        persistencia = summary.model_dump(mode="json")
+        logger.info(
+            "resultado_scraper_persistido",
+            extra={"job_id": str(job_id), "plataforma": resultado.get("plataforma"), "persistidas": summary.persistidas},
+        )
+        if summary.normalizadas == 0:
+            return {**resultado, "status": "sin_propiedades", "persistencia": persistencia}
+        return {**resultado, "persistencia": persistencia}
+    except (SQLAlchemyError, ValueError) as exc:
+        logger.exception("persistencia_ingesta_error", extra={"job_id": str(job_id)})
+        return {**resultado, "status": "persistencia_error", "error_persistencia": str(exc)}
+
+
 async def _procesar_mensaje(id_mensaje: str, datos: dict[bytes, bytes]) -> None:
     """Ejecuta el trabajo del mensaje. No confirma: eso lo hace el bucle."""
     crudo = datos.get(b"payload", b"{}")
@@ -123,6 +173,17 @@ async def _procesar_mensaje(id_mensaje: str, datos: dict[bytes, bytes]) -> None:
             else:
                 normalizados.append(resultado)
 
+        if job_id is not None:
+            normalizados = [
+                await _persistir_resultado(
+                    job_id,
+                    resultado,
+                    query=query,
+                    plataformas=plataformas,
+                )
+                for resultado in normalizados
+            ]
+
         progress = {r["plataforma"]: str(r.get("status", "desconocido")) for r in normalizados}
         estado = _estado_final(normalizados)
 
@@ -131,6 +192,11 @@ async def _procesar_mensaje(id_mensaje: str, datos: dict[bytes, bytes]) -> None:
                 await aplicar_transicion(job_id, estado, progress=progress)
             except TransicionInvalida:
                 logger.warning("estado_final_rechazado", extra={"job_id": str(job_id)})
+            try:
+                async with unidad_de_trabajo() as unidad:
+                    await unidad.jobs.actualizar_estado(job_id, estado.value)
+            except SQLAlchemyError:
+                logger.exception("estado_job_sql_no_actualizado", extra={"job_id": str(job_id)})
 
         logger.info(
             "mensaje_procesado",

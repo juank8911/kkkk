@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 import httpx
@@ -26,6 +26,7 @@ from app.core.redis_client import redis_client
 logger = logging.getLogger("OpenClaw.Geocoding")
 
 PREFIJO = "openclaw:geo:"
+CENSUS_PREFIJO = "openclaw:census_geo:"
 SIN_RESULTADO = "null"
 
 
@@ -38,11 +39,31 @@ class Coordenadas:
     fuente: str = "nominatim"
 
 
+@dataclass(frozen=True, slots=True)
+class UbicacionCensus:
+    """Respuesta directa de Census para una dirección del anuncio."""
+
+    direccion: str
+    lat: float
+    lon: float
+    ciudad: str | None
+    codigo_postal: str | None
+    condado: str | None
+    fuente: str = "census_geocoder"
+
+
 def clave_geo(direccion: str) -> str:
     """Clave de cache estable e independiente de mayusculas y espacios."""
     normalizada = " ".join(direccion.lower().split())
     digest = hashlib.sha256(normalizada.encode("utf-8")).hexdigest()
     return f"{PREFIJO}{digest}"
+
+
+def clave_census(direccion: str) -> str:
+    """Clave de caché separada para conservar la procedencia Census."""
+    normalizada = " ".join(direccion.lower().split())
+    digest = hashlib.sha256(normalizada.encode("utf-8")).hexdigest()
+    return f"{CENSUS_PREFIJO}{digest}"
 
 
 async def _leer_cache(clave: str) -> tuple[bool, Coordenadas | None]:
@@ -116,3 +137,66 @@ async def geocodificar(
 
     await _escribir_cache(clave, coordenadas)
     return coordenadas
+
+
+async def geocodificar_census(
+    direccion: str,
+    *,
+    cliente: httpx.AsyncClient | None = None,
+) -> UbicacionCensus | None:
+    """Consulta Census Geocoder y conserva ciudad, ZIP y condado devueltos."""
+    if not direccion.strip():
+        return None
+    clave = clave_census(direccion)
+    crudo = await redis_client.get(clave)
+    if crudo is not None:
+        texto = crudo.decode("utf-8") if isinstance(crudo, bytes) else str(crudo)
+        if texto == SIN_RESULTADO:
+            return None
+        try:
+            datos = json.loads(texto)
+            return UbicacionCensus(**datos)
+        except (TypeError, ValueError):
+            await redis_client.delete(clave)
+
+    propio = cliente is None
+    cliente_http = cliente or httpx.AsyncClient(timeout=10.0, headers={"User-Agent": settings.GEOCODING_USER_AGENT})
+    try:
+        respuesta = await cliente_http.get(
+            settings.CENSUS_GEOCODING_URL,
+            params={
+                "address": direccion,
+                "benchmark": settings.CENSUS_GEOCODING_BENCHMARK,
+                "format": "json",
+                "returntype": "geographies",
+            },
+        )
+        respuesta.raise_for_status()
+        match = (respuesta.json().get("result", {}).get("addressMatches") or [None])[0]
+        if not match:
+            await redis_client.set(clave, SIN_RESULTADO, ex=settings.GEOCODING_TTL_SEGUNDOS)
+            return None
+        componentes = match.get("addressComponents") or {}
+        geographies = match.get("geographies") or {}
+        county = None
+        for values in geographies.values():
+            if isinstance(values, list) and values and isinstance(values[0], dict):
+                county = values[0].get("NAME") or values[0].get("name") or county
+                if county:
+                    break
+        resultado = UbicacionCensus(
+            direccion=str(match.get("matchedAddress") or direccion),
+            lat=float(match["coordinates"]["y"]),
+            lon=float(match["coordinates"]["x"]),
+            ciudad=componentes.get("city") or componentes.get("cityName"),
+            codigo_postal=componentes.get("zip"),
+            condado=county,
+        )
+        await redis_client.set(clave, json.dumps(asdict(resultado)), ex=settings.GEOCODING_TTL_SEGUNDOS)
+        return resultado
+    except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+        logger.warning("census_geocoding_error", extra={"error": str(exc)})
+        return None
+    finally:
+        if propio:
+            await cliente_http.aclose()

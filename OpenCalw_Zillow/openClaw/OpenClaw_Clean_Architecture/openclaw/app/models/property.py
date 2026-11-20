@@ -36,9 +36,9 @@ class DatosPropiedadNormalizados(BaseModel):
     fuente_ubicacion: str = Field(default="anuncio", min_length=2, max_length=80)
     confianza_ubicacion: str = Field(default="anuncio", min_length=2, max_length=30)
     fecha_consulta: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    datos_oraculo: dict[str, object] = Field(
+    datos_mercado: dict[str, object] = Field(
         default_factory=dict,
-        description="Señales informativas del Oráculo, con fuente, licencia y advertencias",
+        description="Datos directos de mercado, con fuente, fecha, cobertura y confianza",
     )
     precio_usd: float = Field(
         ...,

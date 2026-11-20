@@ -77,7 +77,7 @@ class Propiedad(Base):
     condado: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     fuente_ubicacion: Mapped[str] = mapped_column(String(80), nullable=False, default="anuncio")
     confianza_ubicacion: Mapped[str] = mapped_column(String(30), nullable=False, default="anuncio")
-    datos_oraculo: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+    datos_mercado: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     precio_usd: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     ingreso_anual_estimado: Mapped[float] = mapped_column(
         Numeric(14, 2), nullable=False, default=0

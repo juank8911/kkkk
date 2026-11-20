@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     GEOCODING_URL: str = "https://nominatim.openstreetmap.org/search"
     GEOCODING_USER_AGENT: str = "OpenClaw/0.2 (+dev1@openclaw.local)"
     GEOCODING_TTL_SEGUNDOS: int = Field(default=2592000, ge=3600)
+    CENSUS_GEOCODING_URL: str = "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress"
+    CENSUS_GEOCODING_BENCHMARK: str = "Public_AR_Current"
     REDIS_STREAM_DLQ_DECISIONES: str = "openclaw_decisiones_dlq"
     DECISION_MAX_INTENTOS_NODO: int = Field(default=2, ge=1, le=5)
     OFERTA_TRACKER_INTERVAL_SEGUNDOS: int = Field(default=43200, ge=300)
