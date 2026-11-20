@@ -1,0 +1,91 @@
+{
+  "uid": "openclaw-business-ops-f100",
+  "title": "OpenClaw — Negocio, Pipeline y SLOs (Fase 100)",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["openclaw", "real-estate", "fase100", "slo"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Jobs de barrido por estado",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(openclaw_jobs_total[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Latencia p95 por etapa del pipeline (s)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, stage) (rate(openclaw_pipeline_stage_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Propiedades normalizadas vs rechazadas",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(increase(openclaw_properties_normalized_total[1h]))",
+          "legendFormat": "normalizadas"
+        },
+        {
+          "expr": "sum(increase(openclaw_properties_rejected_total[1h]))",
+          "legendFormat": "rechazadas"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Decisiones del grafo por veredicto",
+      "type": "bargauge",
+      "targets": [
+        {
+          "expr": "sum by (veredicto) (increase(openclaw_decisions_total[24h]))",
+          "legendFormat": "{{veredicto}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Ofertas activas y transiciones (Fase 95)",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum by (estado) (openclaw_offers_active)",
+          "legendFormat": "{{estado}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Profundidad de DLQ (scraping y decisiones)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "openclaw_dlq_depth",
+          "legendFormat": "dlq {{stream}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Errores y bloqueos por fuente externa",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (platform, reason) (rate(openclaw_source_failures_total[5m]))",
+          "legendFormat": "{{platform}} ({{reason}})"
+        }
+      ]
+    }
+  ]
+}
