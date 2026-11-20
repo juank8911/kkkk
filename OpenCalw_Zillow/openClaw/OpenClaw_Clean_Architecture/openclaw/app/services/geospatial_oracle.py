@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Protocol
+from typing import Protocol, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -115,7 +115,7 @@ class GeospatialZoneData(BaseModel):
     extra_variables: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _validar_proxies_y_estado(self) -> GeospatialZoneData:
+    def _validar_proxies_y_estado(self) -> Self:
         self.state = self.state.upper()
         if self.extra_variables:
             validar_variables_permitidas(self.extra_variables)
