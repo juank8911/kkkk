@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     GEOCODING_TTL_SEGUNDOS: int = Field(default=2592000, ge=3600)
     REDIS_STREAM_DLQ_DECISIONES: str = "openclaw_decisiones_dlq"
     DECISION_MAX_INTENTOS_NODO: int = Field(default=2, ge=1, le=5)
+    OFERTA_TRACKER_INTERVAL_SEGUNDOS: int = Field(default=43200, ge=300)
+    OFERTA_TRACKER_LOCK_TTL_SEGUNDOS: int = Field(default=900, ge=60)
+    OFERTA_TRACKER_MAX_OFERTAS_LOTE: int = Field(default=50, ge=1, le=500)
+    REDIS_STREAM_DLQ_OFERTAS: str = "openclaw_ofertas_dlq"
 
     FIRECRAWL_API_KEY: str = ""
     OPENCLAW_API_KEY: str = ""

@@ -64,6 +64,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  offer-tracker:
+    build:
+      context: .
+      target: offer-tracker
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openclaw}:${POSTGRES_PASSWORD:-openclaw}@postgres:5432/${POSTGRES_DB:-openclaw}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   redis-data:
   pg-data:

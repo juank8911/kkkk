@@ -16,6 +16,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -99,6 +100,60 @@ class FirecrawlAdapter:
                 )
             self._client = FirecrawlApp(api_key=self._api_key)
         return self._client
+
+    async def scrape_url(self, url: str, platform: str) -> ScrapeResult:
+        """Extrae una ficha ya registrada, validando HTTPS y el dominio del catálogo."""
+        started = time.perf_counter()
+        try:
+            spec = get_platform_spec(platform)
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme != "https" or not (host == spec.domain or host.endswith(f".{spec.domain}")):
+                raise InvalidQueryError(f"La URL no corresponde al dominio autorizado '{spec.domain}'.")
+            decision = await self._rate_limiter.check_and_acquire(spec.domain)
+            if not decision.allowed:
+                return ScrapeResult(
+                    ok=False,
+                    status=ScrapeStatus.RATE_LIMITED,
+                    platform=spec.key,
+                    url=url,
+                    error=TypedScrapeError(
+                        code=ScrapeErrorCode.RATE_LIMITED,
+                        message="Límite de tasa o Redis no disponible.",
+                        platform=spec.key,
+                        url=url,
+                        retryable=True,
+                    ),
+                )
+            raw_response = await asyncio.wait_for(self._invoke_firecrawl(url), timeout=self._timeout_seconds)
+            markdown, metadata, _ = _extract_response_payload(raw_response)
+            return ScrapeResult(
+                ok=True,
+                status=ScrapeStatus.OK,
+                platform=spec.key,
+                url=url,
+                markdown=markdown,
+                metadata=metadata,
+                attempts=1,
+                elapsed_ms=_elapsed_ms(started),
+            )
+        except Exception as exc:  # noqa: BLE001 - se devuelve error tipado al tracker
+            return ScrapeResult(
+                ok=False,
+                status=ScrapeStatus.UPSTREAM_ERROR,
+                platform=platform,
+                url=url,
+                attempts=1,
+                elapsed_ms=_elapsed_ms(started),
+                error=TypedScrapeError(
+                    code=ScrapeErrorCode.UPSTREAM_ERROR,
+                    message=str(exc),
+                    platform=platform,
+                    url=url,
+                    retryable=True,
+                    cause_type=type(exc).__name__,
+                ),
+            )
 
     async def scrape(self, platform: str, query: str) -> ScrapeResult:
         """Ejecuta la extracción con validación de catálogo, rate limit, timeout y backoff."""
