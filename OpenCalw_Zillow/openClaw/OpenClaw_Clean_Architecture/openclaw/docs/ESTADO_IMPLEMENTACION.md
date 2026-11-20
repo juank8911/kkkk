@@ -68,11 +68,31 @@ Flujo acordado:
 - `alembic/versions/0001_esquema_inicial.py`: esquema completo con índices y restricciones.
 - `alembic/versions/0002_semilla_plataformas.py`: semilla idempotente de las 9 plataformas.
 
+### S2-03 · Repositorios y unidad de trabajo
+
+- `app/db/repositories.py`: `RepositorioJobs`, `RepositorioPropiedades`,
+  `RepositorioDecisiones` y `RepositorioEventos`. Ninguno gestiona transacciones.
+- `app/db/uow.py`: `UnidadDeTrabajo` (contexto con commit o rollback) y
+  `procesar_por_propiedad`, que confirma cada propiedad en su propia transacción
+  y devuelve la lista de fallos sin abortar el lote.
+- Pruebas: `tests/test_repositories.py` (6 casos con sesión falsa).
+
+### S2-05 · Webhook de Telegram
+
+- Autenticación por `X-Telegram-Bot-Api-Secret-Token` o, en su defecto, la API
+  key táctica; sin `secret_token` configurado en producción responde 503.
+- Allowlist de chats en `TG_ALLOWED_CHAT_IDS` (CSV); vacía significa sin restricción.
+- Deduplicación de `update_id` con `SET NX EX` en Redis y TTL configurable.
+  Si Redis no responde el webhook falla cerrado (503), porque un `/buy`
+  duplicado cuesta más que un reintento.
+- Pruebas: `tests/test_telegram_webhook.py` (10 casos).
+
 ## Verificación
 
 | Comprobación | Resultado |
 |---|---|
-| `pyright` (modo basic) sobre `app`, `tests`, `scripts` | 0 errores, 49 archivos |
+| `pyright` (modo basic) sobre `app`, `tests`, `scripts` | 0 errores, 68 archivos |
+| Bloque de Dev 2 (S2-06 a S6-05) | Revisado y fusionado en `dev1` |
 | Importación de contratos y catálogo | Consistente entre `contracts.py` y `platforms.py` |
 | Migraciones | Pendientes de ejecutar: en este equipo no hay Python utilizable |
 
@@ -83,6 +103,6 @@ análisis estático y el CI queda como puerta de calidad.
 
 ## Siguiente corte
 
-1. S2-03: repositorios y unidad de trabajo por mensaje.
-2. S2-05: webhook de Telegram con `secret_token`, allowlist y dedupe de `update_id`.
-3. Revisión del bloque de Dev 2 (S2-06 a S2-09) y fusión en `dev1`.
+1. Sprint 3: consumer group con `XAUTOCLAIM`, reintentos y DLQ (S3-01).
+2. Idempotencia por `job_id` + plataforma (S3-02) y máquina de estados (S3-03).
+3. Conectar el worker a la unidad de trabajo para escribir en PostgreSQL.
