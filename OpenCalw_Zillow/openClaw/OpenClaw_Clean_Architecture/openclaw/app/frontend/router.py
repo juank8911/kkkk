@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 
 from app.api.routes import ingestion
 from app.core.redis_client import redis_client
 from app.frontend.markets import MercadoAtractivo, listar_mercados_ordenados
+from app.frontend.sweep_properties import (
+    PropiedadesBarridoResponse,
+    obtener_propiedades_por_barrido,
+)
 from app.models.contracts import BarridoRequest, JobResponse
 from app.services.market_data import fuentes_directas_mercado
+
+logger = logging.getLogger("OpenClaw.Panel")
 
 PANEL_HTML_PATH = Path(__file__).resolve().parent / "panel.html"
 
@@ -88,3 +95,23 @@ async def crear_barrido_desde_panel(payload: BarridoRequest) -> JobResponse:
 async def consultar_barrido_desde_panel(job_id: UUID) -> JobResponse:
     """Consulta el estado del job sin enviar la clave táctica al navegador."""
     return await ingestion.consultar_barrido(job_id)
+
+
+@router.get(
+    "/panel/api/barridos/{job_id}/propiedades",
+    response_model=PropiedadesBarridoResponse,
+    summary="Lista las propiedades de un barrido clasificadas por estado de análisis",
+)
+async def listar_propiedades_barrido_panel(job_id: UUID) -> PropiedadesBarridoResponse:
+    """Devuelve las propiedades persistidas del barrido: enviadas a aprobación, rechazadas y pendientes."""
+    try:
+        return await obtener_propiedades_por_barrido(job_id)
+    except Exception as exc:  # noqa: BLE001 - fallo de BD reportado como 503 controlado
+        logger.warning(
+            "panel_propiedades_barrido_error",
+            extra={"job_id": str(job_id), "error": str(exc)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudieron consultar las propiedades del barrido en PostgreSQL",
+        ) from exc

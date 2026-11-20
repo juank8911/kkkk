@@ -36,6 +36,10 @@ from app.services.domain_semaphore import semaforos
 from app.services.platforms import InvalidPlatformError, get_platform_spec
 from app.services.scraper import extraer_con_reintentos
 from app.services.ingestion_pipeline import procesar_lote_extraccion_con_uow
+from app.services.ollama_listing_extractor import (
+    extraction_to_markdown,
+    extraer_viviendas_ollama,
+)
 from app.workers.state_machine import TransicionInvalida, aplicar_transicion
 
 logger = logging.getLogger("OpenClaw.Worker")
@@ -115,6 +119,27 @@ async def _persistir_resultado(
     if not markdown:
         return {**resultado, "persistencia": {"persistidas": 0, "motivo": "markdown_vacio"}}
 
+    markdown_para_pipeline = markdown
+    extraction, extraction_error = await extraer_viviendas_ollama(
+        markdown,
+        query=query,
+        platform=str(resultado.get("plataforma") or "desconocida"),
+        url_origen=resultado.get("dominio"),
+    )
+    if extraction is not None:
+        markdown_para_pipeline = extraction_to_markdown(
+            extraction,
+            platform=str(resultado.get("plataforma") or "desconocida"),
+            url_origen=resultado.get("dominio"),
+        )
+        if not markdown_para_pipeline:
+            return {
+                **resultado,
+                "status": "sin_propiedades",
+                "extraccion": {"modelo": settings.OLLAMA_MODEL, "viviendas": 0},
+                "persistencia": {"persistidas": 0, "motivo": "ollama_sin_viviendas"},
+            }
+
     try:
         async with unidad_de_trabajo() as unidad:
             if await unidad.jobs.obtener(job_id) is None:
@@ -130,7 +155,7 @@ async def _persistir_resultado(
                 unidad,
                 job_id=job_id,
                 plataforma=str(resultado.get("plataforma") or "desconocida"),
-                markdown=markdown,
+                markdown=markdown_para_pipeline,
                 url_origen=resultado.get("dominio"),
             )
         persistencia = summary.model_dump(mode="json")
@@ -138,9 +163,10 @@ async def _persistir_resultado(
             "resultado_scraper_persistido",
             extra={"job_id": str(job_id), "plataforma": resultado.get("plataforma"), "persistidas": summary.persistidas},
         )
+        extra = {"modelo": settings.OLLAMA_MODEL, "viviendas": len(extraction.viviendas_en_venta)} if extraction else {"fallback": extraction_error or "ollama_no_configurado"}
         if summary.normalizadas == 0:
-            return {**resultado, "status": "sin_propiedades", "persistencia": persistencia}
-        return {**resultado, "persistencia": persistencia}
+            return {**resultado, "status": "sin_propiedades", "extraccion": extra, "persistencia": persistencia}
+        return {**resultado, "extraccion": extra, "persistencia": persistencia}
     except (SQLAlchemyError, ValueError) as exc:
         logger.exception("persistencia_ingesta_error", extra={"job_id": str(job_id)})
         return {**resultado, "status": "persistencia_error", "error_persistencia": str(exc)}

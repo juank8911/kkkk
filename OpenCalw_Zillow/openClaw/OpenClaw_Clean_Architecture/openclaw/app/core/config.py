@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     GEOCODING_TTL_SEGUNDOS: int = Field(default=2592000, ge=3600)
     CENSUS_GEOCODING_URL: str = "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress"
     CENSUS_GEOCODING_BENCHMARK: str = "Public_AR_Current"
+    OLLAMA_BASE_URL: str = "https://resuciter.jeikeisolutions.com/ollama"
+    OLLAMA_API_KEY: str = ""
+    OLLAMA_MODEL: str = "qwen2.5:3b"
+    OLLAMA_TIMEOUT_SEGUNDOS: int = Field(default=300, ge=10, le=300)
+    OLLAMA_MAX_MARKDOWN_CHARS: int = Field(default=50000, ge=5000, le=200000)
     REDIS_STREAM_DLQ_DECISIONES: str = "openclaw_decisiones_dlq"
     DECISION_MAX_INTENTOS_NODO: int = Field(default=2, ge=1, le=5)
     OFERTA_TRACKER_INTERVAL_SEGUNDOS: int = Field(default=43200, ge=300)
