@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,7 +17,11 @@
       --warn: #f59e0b;
       --err: #ef4444;
     }
-    * { box-sizing: border-box; }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -24,6 +29,7 @@
       color: var(--text);
       padding: 24px;
     }
+
     header {
       display: flex;
       justify-content: space-between;
@@ -34,10 +40,27 @@
       border-bottom: 1px solid var(--border);
       padding-bottom: 12px;
     }
-    h1 { margin: 0; font-size: 1.35rem; }
-    h2 { margin-top: 0; font-size: 1.05rem; }
-    .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    input, select, button {
+
+    h1 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 1.05rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    input,
+    select,
+    button {
       background: var(--card);
       color: var(--text);
       border: 1px solid var(--border);
@@ -45,19 +68,34 @@
       padding: 8px 10px;
       font-size: 0.9rem;
     }
-    select#market-selector { min-width: 300px; max-width: 440px; }
-    button { cursor: pointer; background: #0284c7; border-color: #0284c7; }
-    button:hover { opacity: 0.9; }
+
+    select#market-selector {
+      min-width: 300px;
+      max-width: 440px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #0284c7;
+      border-color: #0284c7;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
     button.btn-secondary {
       background: #1e293b;
       border-color: var(--border);
       padding: 4px 8px;
       font-size: 0.78rem;
     }
+
     button.btn-sweep-sm {
       padding: 4px 8px;
       font-size: 0.78rem;
     }
+
     button.btn-icon-props {
       display: inline-flex;
       align-items: center;
@@ -68,21 +106,25 @@
       border: 1px solid var(--accent);
       color: var(--accent);
     }
+
     button.btn-icon-props:hover {
       background: rgba(56, 189, 248, 0.16);
     }
+
     .grid {
       display: grid;
       grid-template-columns: 1.2fr 1fr;
       gap: 16px;
       margin-bottom: 16px;
     }
+
     .panel {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 16px;
     }
+
     .markets-header {
       display: flex;
       justify-content: space-between;
@@ -91,13 +133,44 @@
       flex-wrap: wrap;
       margin-bottom: 10px;
     }
-    .muted { color: var(--muted); font-size: 0.82rem; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    tr.job-row, tr.market-row { cursor: pointer; }
-    tr.job-row:hover, tr.market-row:hover { background: rgba(56, 189, 248, 0.08); }
-    tr.market-selected { background: rgba(56, 189, 248, 0.16); }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    tr.job-row,
+    tr.market-row {
+      cursor: pointer;
+    }
+
+    tr.job-row:hover,
+    tr.market-row:hover {
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    tr.market-selected {
+      background: rgba(56, 189, 248, 0.16);
+    }
+
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -106,18 +179,62 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    .status-queued { background: #334155; }
-    .status-running { background: #0369a1; }
-    .status-completed { background: #15803d; }
-    .status-partial { background: #b45309; }
-    .status-failed { background: #b91c1c; }
-    .prop-enviada_aprobacion { background: #15803d; color: #f0fdf4; }
-    .prop-rechazada_directamente { background: #b91c1c; color: #fef2f2; }
-    .prop-error_analisis { background: #b45309; color: #fffbeb; }
-    .prop-pendiente_analisis { background: #475569; color: #f8fafc; }
-    .score-high { background: #15803d; color: #f0fdf4; }
-    .score-mid { background: #0369a1; color: #f0f9ff; }
-    .score-low { background: #b45309; color: #fffbeb; }
+
+    .status-queued {
+      background: #334155;
+    }
+
+    .status-running {
+      background: #0369a1;
+    }
+
+    .status-completed {
+      background: #15803d;
+    }
+
+    .status-partial {
+      background: #b45309;
+    }
+
+    .status-failed {
+      background: #b91c1c;
+    }
+
+    .prop-enviada_aprobacion {
+      background: #15803d;
+      color: #f0fdf4;
+    }
+
+    .prop-rechazada_directamente {
+      background: #b91c1c;
+      color: #fef2f2;
+    }
+
+    .prop-error_analisis {
+      background: #b45309;
+      color: #fffbeb;
+    }
+
+    .prop-pendiente_analisis {
+      background: #475569;
+      color: #f8fafc;
+    }
+
+    .score-high {
+      background: #15803d;
+      color: #f0fdf4;
+    }
+
+    .score-mid {
+      background: #0369a1;
+      color: #f0f9ff;
+    }
+
+    .score-low {
+      background: #b45309;
+      color: #fffbeb;
+    }
+
     .score-bar-wrap {
       width: 84px;
       height: 6px;
@@ -126,16 +243,19 @@
       overflow: hidden;
       margin-top: 4px;
     }
+
     .score-bar-fill {
       height: 100%;
       background: linear-gradient(90deg, #38bdf8, #22c55e);
     }
+
     .selected-market-pill {
       display: inline-block;
       margin-top: 4px;
       font-size: 0.8rem;
       color: var(--accent);
     }
+
     pre {
       background: #0b1220;
       border: 1px solid var(--border);
@@ -145,6 +265,7 @@
       max-height: 260px;
       font-size: 0.8rem;
     }
+
     #telemetry-log {
       list-style: none;
       margin: 0;
@@ -154,7 +275,13 @@
       font-family: ui-monospace, SFMono-Regular, monospace;
       font-size: 0.8rem;
     }
-    #telemetry-log li { padding: 4px 0; border-bottom: 1px solid #1e293b; color: var(--muted); }
+
+    #telemetry-log li {
+      padding: 4px 0;
+      border-bottom: 1px solid #1e293b;
+      color: var(--muted);
+    }
+
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -165,7 +292,11 @@
       padding: 20px;
       z-index: 1000;
     }
-    .modal-backdrop.open { display: flex; }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
     .modal-dialog {
       background: var(--card);
       border: 1px solid var(--border);
@@ -177,6 +308,7 @@
       padding: 18px;
       gap: 12px;
     }
+
     .modal-header {
       display: flex;
       justify-content: space-between;
@@ -185,15 +317,18 @@
       border-bottom: 1px solid var(--border);
       padding-bottom: 10px;
     }
+
     .modal-body {
       overflow-y: auto;
       flex: 1;
     }
+
     .kpi-tabs {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .kpi-tab {
       background: #0f172a;
       border: 1px solid var(--border);
@@ -202,23 +337,36 @@
       border-radius: 8px;
       font-size: 0.82rem;
     }
+
     .kpi-tab.active {
       border-color: var(--accent);
       background: rgba(56, 189, 248, 0.16);
       color: var(--accent);
     }
+
     .prop-link {
       color: var(--accent);
       text-decoration: none;
       font-size: 0.8rem;
     }
-    .prop-link:hover { text-decoration: underline; }
+
+    .prop-link:hover {
+      text-decoration: underline;
+    }
+
     @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
-      select#market-selector { min-width: 220px; width: 100%; }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      select#market-selector {
+        min-width: 220px;
+        width: 100%;
+      }
     }
   </style>
 </head>
+
 <body>
   <header>
     <div>
@@ -230,7 +378,8 @@
       <select id="market-selector" aria-label="Selector de mercado por porcentaje de atractivo">
         <option value="">Cargando mercados ordenados por % de atractivo...</option>
       </select>
-      <input id="query-input" type="text" placeholder="Ej: Cleveland, OH" value="Cleveland, OH" aria-label="Consulta de ciudad para barrido" />
+      <input id="query-input" type="text" placeholder="Ej: Cleveland, OH" value="Cleveland, OH"
+        aria-label="Consulta de ciudad para barrido" />
       <button id="btn-create-job" type="button">Iniciar barrido</button>
       <button id="btn-connect-ws" type="button">Conectar WS</button>
     </div>
@@ -276,7 +425,8 @@
         <div>
           <h2 style="margin-bottom: 4px;">Mercados objetivo ordenados por % de atractivo</h2>
           <div class="muted">
-            Fórmula explicable: 50% yield bruto anual + 25% accesibilidad de compra + 15% renta mensual + 10% factores operativos/fiscales. Haz clic en una fila para cargarla en el selector de Iniciar barrido.
+            Fórmula explicable: 50% yield bruto anual + 25% accesibilidad de compra + 15% renta mensual + 10% factores
+            operativos/fiscales. Haz clic en una fila para cargarla en el selector de Iniciar barrido.
           </div>
         </div>
         <div class="controls">
@@ -306,14 +456,16 @@
     </section>
   </main>
 
-  <div id="job-properties-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="job-properties-title">
+  <div id="job-properties-modal" class="modal-backdrop" role="dialog" aria-modal="true"
+    aria-labelledby="job-properties-title">
     <div class="modal-dialog">
       <div class="modal-header">
         <div>
           <h2 id="job-properties-title" style="margin-bottom: 4px;">Propiedades del barrido</h2>
           <div id="job-properties-subtitle" class="muted"></div>
         </div>
-        <button id="btn-close-properties-modal" type="button" class="btn-secondary" aria-label="Cerrar visor de propiedades">Cerrar ✕</button>
+        <button id="btn-close-properties-modal" type="button" class="btn-secondary"
+          aria-label="Cerrar visor de propiedades">Cerrar ✕</button>
       </div>
 
       <div id="job-properties-tabs" class="kpi-tabs" role="tablist" aria-label="Filtro por estado de análisis"></div>
@@ -620,14 +772,44 @@
           tdProp.appendChild(locDiv);
         }
 
+        if (prop.contacto_vendedor) {
+          const contactDiv = document.createElement("div");
+          contactDiv.className = "muted";
+          contactDiv.textContent = `Contacto: ${prop.contacto_vendedor}`;
+          tdProp.appendChild(contactDiv);
+        }
+
+        const linksWrap = document.createElement("div");
+        linksWrap.style.display = "flex";
+        linksWrap.style.gap = "8px";
+        linksWrap.style.flexWrap = "wrap";
+        linksWrap.style.marginTop = "4px";
+
         if (prop.url_origen && (prop.url_origen.startsWith("https://") || prop.url_origen.startsWith("http://"))) {
           const link = document.createElement("a");
           link.className = "prop-link";
           link.href = prop.url_origen;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
-          link.textContent = "Ver anuncio";
-          tdProp.appendChild(link);
+          link.textContent = "Ver publicación";
+          linksWrap.appendChild(link);
+        }
+
+        const fotos = Array.isArray(prop.imagenes) ? prop.imagenes.slice(0, 2) : [];
+        fotos.forEach((fotoUrl, idx) => {
+          if (typeof fotoUrl === "string" && (fotoUrl.startsWith("https://") || fotoUrl.startsWith("http://"))) {
+            const imgLink = document.createElement("a");
+            imgLink.className = "prop-link";
+            imgLink.href = fotoUrl;
+            imgLink.target = "_blank";
+            imgLink.rel = "noopener noreferrer";
+            imgLink.textContent = `Foto ${idx + 1}`;
+            linksWrap.appendChild(imgLink);
+          }
+        });
+
+        if (linksWrap.childNodes.length > 0) {
+          tdProp.appendChild(linksWrap);
         }
 
         const tdPlat = document.createElement("td");
@@ -833,8 +1015,7 @@
       if (val === "__custom__") {
         selectedMarketQuery = "";
         updateSelectedMarketSummary(null);
-        renderMarketsTable();
-        document.getElementById("query-input").focus();
+        renderMarketsTae()   document.getElementById("query-input").focus();
       } else if (val) {
         selectMarketByQuery(val, { syncSelect: false });
       }
@@ -861,4 +1042,5 @@
     setInterval(loadMarketDataSources, 30000);
   </script>
 </body>
+
 </html>

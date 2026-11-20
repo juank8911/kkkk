@@ -115,6 +115,24 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  telegram-bot:
+    build:
+      context: .
+      target: telegram-bot
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openclaw}:${POSTGRES_PASSWORD:-openclaw}@postgres:5432/${POSTGRES_DB:-openclaw}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   redis-data:
   pg-data:

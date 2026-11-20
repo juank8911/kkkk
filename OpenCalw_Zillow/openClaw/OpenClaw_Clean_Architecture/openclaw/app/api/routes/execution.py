@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from app.core.config import settings
 from app.core.redis_client import redis_client
 from app.core.security import CABECERA_API_KEY, hash_api_key
+from app.services.telegram_workflow import procesar_interaccion_telegram
 
 logger = logging.getLogger("OpenClaw.Comandos")
 
@@ -41,9 +42,7 @@ def _clave_tactica_valida(valor: str | None) -> bool:
 
 
 async def autorizar_webhook(
-    x_telegram_bot_api_secret_token: Annotated[
-        str | None, Header(alias=CABECERA_SECRETO)
-    ] = None,
+    x_telegram_bot_api_secret_token: Annotated[str | None, Header(alias=CABECERA_SECRETO)] = None,
     x_openclaw_tactical_key: Annotated[str | None, Header(alias=CABECERA_API_KEY)] = None,
 ) -> str:
     """Acepta el ``secret_token`` de Telegram o, en su defecto, la API key tactica."""
@@ -79,9 +78,7 @@ async def _update_es_nuevo(update_id: int) -> bool:
     """Marca el update como visto; False si ya se proceso antes."""
     clave = f"{PREFIJO_DEDUPE}{update_id}"
     try:
-        creado = await redis_client.set(
-            clave, "1", nx=True, ex=settings.TG_DEDUPE_TTL_SEGUNDOS
-        )
+        creado = await redis_client.set(clave, "1", nx=True, ex=settings.TG_DEDUPE_TTL_SEGUNDOS)
     except Exception as exc:  # noqa: BLE001 - cualquier fallo de Redis se informa igual
         logger.error("dedupe_no_disponible", extra={"error": str(exc)})
         raise HTTPException(
@@ -108,6 +105,19 @@ async def procesar_comando_telegram(
         logger.info("update_duplicado", extra={"update_id": update_id, "via": identidad})
         return {"status": "Update duplicado ignorado"}
 
+    callback = update.get("callback_query")
+    if isinstance(callback, dict):
+        cb_chat_id = ((callback.get("message") or {}).get("chat") or {}).get("id")
+        autorizados = settings.chats_autorizados
+        if autorizados and cb_chat_id not in autorizados:
+            logger.warning("chat_no_autorizado", extra={"chat_id": str(cb_chat_id)})
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Chat no autorizado para comandos",
+            )
+        resultado = await procesar_interaccion_telegram(update)
+        return {"status": str(resultado.get("status") or "ok")}
+
     mensaje = update.get("message") or {}
     chat_id = (mensaje.get("chat") or {}).get("id")
     autorizados = settings.chats_autorizados
@@ -120,6 +130,10 @@ async def procesar_comando_telegram(
 
     texto = str(mensaje.get("text", "")).strip()
     if not texto.startswith("/buy"):
+        if texto and not texto.startswith("/"):
+            resultado = await procesar_interaccion_telegram(update)
+            if resultado.get("status") == "negociacion_iniciada":
+                return {"status": "Negociación iniciada"}
         return {"status": "Comando ignorado"}
 
     if settings.BUY_MODE != "sandbox":

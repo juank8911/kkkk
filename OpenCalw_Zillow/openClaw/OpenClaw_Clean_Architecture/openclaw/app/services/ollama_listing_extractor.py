@@ -85,6 +85,7 @@ class OllamaListing(BaseModel):
     superficie_sqft: float | None = Field(default=None, ge=0)
     renta_mensual_usd: float | None = Field(default=None, ge=0)
     descripcion: str | None = None
+    contacto_vendedor: str | None = None
     imagenes: list[str] = Field(default_factory=list)
     confianza_extraccion: float = Field(default=0, ge=0, le=1)
 
@@ -168,8 +169,10 @@ def _listing_markdown(
         f"Description: {item.descripcion or f'Anuncio extraído en {platform} para {direccion}'}",
         f"Extraction Source: Ollama {settings.OLLAMA_MODEL} ({platform})",
     ]
+    if item.contacto_vendedor:
+        lines.append(f"Seller Contact: {item.contacto_vendedor}")
     if item.imagenes:
-        lines.extend(f"![listing image]({url})" for url in item.imagenes)
+        lines.extend(f"![listing image]({url})" for url in item.imagenes[:2])
     return "\n".join(lines)
 
 
@@ -248,6 +251,24 @@ _CARD_BEDS_RE = re.compile(r"(?i)(?:\*\*)?(\d+(?:\.\d+)?)(?:\*\*)?\s*(?:bds?|bed
 _CARD_BATHS_RE = re.compile(r"(?i)(?:\*\*)?(\d+(?:\.\d+)?)(?:\*\*)?\s*(?:ba|baths?|bathrooms?)\b")
 _CARD_SQFT_RE = re.compile(r"(?i)(?:\*\*)?([\d,]{3,6})(?:\*\*)?\s*(?:sq\s*ft|sqft)\b")
 _CARD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^\s)]+)\)")
+_CARD_SELLER_RE = re.compile(
+    r"(?im)(?:brokered\s+by|listed\s+by|listing\s+by|agent|contact|for\s+sale\s+by\s+owner)"
+    r"[:\s\-]*([^\n|]{3,100})"
+)
+_IGNORED_IMG_TOKENS: tuple[str, ...] = (
+    "logo",
+    "favicon",
+    "icon",
+    ".svg",
+    "sprite",
+    "badge",
+    "equal-housing",
+    "/flags/",
+    "maps.gstatic",
+    "app-download",
+    "google-play",
+    "apple-app",
+)
 _QUERY_STATE_RE = re.compile(r",\s*([A-Z]{2})\b")
 
 
@@ -377,11 +398,20 @@ def extraer_viviendas_determinista(
         m_beds = _CARD_BEDS_RE.search(fragmento)
         m_baths = _CARD_BATHS_RE.search(fragmento)
         m_sqft = _CARD_SQFT_RE.search(fragmento)
-        imagenes = [
-            img
-            for img in _CARD_IMAGE_RE.findall(fragmento)
-            if not any(tok in img.lower() for tok in ("logo", "favicon", "icon", ".svg", "sprite"))
-        ][:5]
+        m_seller = _CARD_SELLER_RE.search(fragmento)
+        contacto_vendedor: str | None = None
+        if m_seller:
+            candidato = " ".join(m_seller.group(0).split()).strip(" -|*")
+            if len(candidato) >= 5 and "contact agent" not in candidato.lower():
+                contacto_vendedor = candidato[:120]
+
+        imagenes: list[str] = []
+        for img in _CARD_IMAGE_RE.findall(fragmento):
+            low = img.lower()
+            if not any(tok in low for tok in _IGNORED_IMG_TOKENS) and img not in imagenes:
+                imagenes.append(img)
+            if len(imagenes) >= 2:
+                break
 
         detalles: list[str] = []
         if m_beds:
@@ -409,6 +439,7 @@ def extraer_viviendas_determinista(
                 banos=float(m_baths.group(1)) if m_baths else None,
                 superficie_sqft=float(m_sqft.group(1).replace(",", "")) if m_sqft else None,
                 descripcion=desc,
+                contacto_vendedor=contacto_vendedor,
                 imagenes=imagenes,
                 confianza_extraccion=0.85,
             )

@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.base import obtener_sessionmaker
 from app.db.models import Decision, Propiedad
+from app.orchestrator.nodes.telegram_alert import extraer_contacto_vendedor
 
 EstadoAnalisisPropiedad = Literal[
     "enviada_aprobacion",
@@ -45,6 +46,8 @@ class PropiedadBarridoItem(BaseModel):
     precio_usd: float = Field(..., ge=0.0)
     ingreso_anual_estimado: float = Field(default=0.0, ge=0.0)
     url_origen: str
+    imagenes: list[str] = Field(default_factory=list)
+    contacto_vendedor: str | None = None
     analizada: bool
     estado_analisis: EstadoAnalisisPropiedad
     etiqueta_estado: str
@@ -104,6 +107,13 @@ def clasificar_propiedad_con_decision(
     decision: Decision | None,
 ) -> PropiedadBarridoItem:
     """Clasifica una propiedad según su última decisión del orquestador."""
+    fotos = [
+        str(u).strip()
+        for u in (propiedad.imagenes or [])
+        if str(u).strip().startswith(("https://", "http://"))
+    ][:2]
+    contacto = extraer_contacto_vendedor(propiedad.descripcion_cruda)
+
     if decision is None:
         estado: EstadoAnalisisPropiedad = "pendiente_analisis"
         return PropiedadBarridoItem(
@@ -115,6 +125,8 @@ def clasificar_propiedad_con_decision(
             precio_usd=float(propiedad.precio_usd),
             ingreso_anual_estimado=float(propiedad.ingreso_anual_estimado or 0.0),
             url_origen=propiedad.url_origen,
+            imagenes=fotos,
+            contacto_vendedor=contacto,
             analizada=False,
             estado_analisis=estado,
             etiqueta_estado=ETIQUETAS_ESTADO[estado],
@@ -150,6 +162,8 @@ def clasificar_propiedad_con_decision(
         precio_usd=float(propiedad.precio_usd),
         ingreso_anual_estimado=float(propiedad.ingreso_anual_estimado or 0.0),
         url_origen=propiedad.url_origen,
+        imagenes=fotos,
+        contacto_vendedor=contacto,
         analizada=True,
         estado_analisis=estado,
         etiqueta_estado=ETIQUETAS_ESTADO[estado],

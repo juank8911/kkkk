@@ -53,3 +53,9 @@ FROM base AS auto-sweeper
 HEALTHCHECK NONE
 
 CMD ["python", "-m", "app.workers.auto_sweeper"]
+
+FROM base AS telegram-bot
+
+HEALTHCHECK NONE
+
+CMD ["python", "-m", "app.workers.telegram_bot_worker"]

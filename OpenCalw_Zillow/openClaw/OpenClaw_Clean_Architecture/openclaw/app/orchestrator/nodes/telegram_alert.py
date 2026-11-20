@@ -1,15 +1,17 @@
-"""Nodo de alerta Telegram con plantilla, deduplicación y enlace a ficha (S4-07).
+"""Nodo de alerta Telegram con plantilla, fotos, URL de publicación y botones inline (S4-07).
 
 Reemplaza las llamadas síncronas bloqueantes de `requests` por `NotifierPort`
 asíncrono con `httpx`, verifica la respuesta de Telegram, restringe el envío al
-chat autorizado y garantiza mediante deduplicación que una misma oportunidad
-genera una sola alerta con enlace directo a su ficha.
+chat autorizado, adjunta la URL real de publicación, hasta 2 fotos y botones
+interactivos de Aprobar / Negociar y Rechazar.
 """
 
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
+import re
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
@@ -19,6 +21,10 @@ from app.core.config import settings
 from app.orchestrator.config import AlertConfig
 
 logger = logging.getLogger("OpenClaw.TelegramAlert")
+
+_SELLER_CONTACT_RE = re.compile(
+    r"(?im)^(?:seller\s+contact|brokered\s+by|listed\s+by|agent)\s*:?\s*(.+)$"
+)
 
 
 class AlertDispatchResult(BaseModel):
@@ -79,6 +85,34 @@ class RedisAlertDedupeStore:
         return bool(claimed)
 
 
+def extraer_contacto_vendedor(descripcion: str | None) -> str | None:
+    """Extrae el contacto o corredor del vendedor si aparece en el texto del anuncio."""
+    if not descripcion:
+        return None
+    m = _SELLER_CONTACT_RE.search(descripcion)
+    if not m:
+        return None
+    valor = " ".join(m.group(1).split()).strip(" -|*")
+    return valor[:140] if len(valor) >= 3 else None
+
+
+def construir_botones_oportunidad(state: dict[str, Any]) -> dict[str, Any] | None:
+    """Construye el teclado inline de Telegram (Aprobar/Rechazar + enlace publicación)."""
+    prop_id = str(state.get("property_id") or "").strip()
+    url_origen = str(state.get("url_origen") or "").strip()
+    filas: list[list[dict[str, str]]] = []
+    if prop_id:
+        filas.append(
+            [
+                {"text": "✅ Aprobar / Negociar", "callback_data": f"apr:{prop_id}"},
+                {"text": "❌ Rechazar", "callback_data": f"rec:{prop_id}"},
+            ]
+        )
+    if url_origen.startswith(("https://", "http://")):
+        filas.append([{"text": "🔗 Ver publicación", "url": url_origen}])
+    return {"inline_keyboard": filas} if filas else None
+
+
 class TelegramNotifierAdapter:
     """Implementación asíncrona de NotifierPort sobre la API Bot de Telegram."""
 
@@ -93,14 +127,8 @@ class TelegramNotifierAdapter:
         self._http_client = http_client
         self._timeout_seconds = timeout_seconds
 
-    async def send_message(self, chat_id: str, text: str) -> tuple[bool, str | None]:
-        if not self._bot_token:
-            return False, "tg_token_not_configured"
-        if not chat_id:
-            return False, "tg_chat_id_not_configured"
-
-        url = f"https://api.telegram.org/bot{self._bot_token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": False}
+    async def _post_telegram(self, method: str, payload: dict[str, Any]) -> tuple[bool, str | None]:
+        url = f"https://api.telegram.org/bot{self._bot_token}/{method}"
         try:
             if self._http_client is not None:
                 resp = await self._http_client.post(url, json=payload)
@@ -117,6 +145,59 @@ class TelegramNotifierAdapter:
         except httpx.HTTPError as exc:
             logger.error("telegram_network_error", extra={"error": str(exc)})
             return False, f"telegram_network_error:{type(exc).__name__}"
+
+    async def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        *,
+        reply_markup: dict[str, Any] | None = None,
+        photo_urls: list[str] | None = None,
+    ) -> tuple[bool, str | None]:
+        if not self._bot_token:
+            return False, "tg_token_not_configured"
+        if not chat_id:
+            return False, "tg_chat_id_not_configured"
+
+        fotos_validas = [
+            u.strip()
+            for u in (photo_urls or [])
+            if isinstance(u, str) and u.strip().startswith(("https://", "http://"))
+        ][:2]
+
+        # Si hay foto válida y el texto entra en el límite de caption (1024 chars), enviamos sendPhoto
+        if fotos_validas and len(text) <= 1020:
+            photo_payload: dict[str, Any] = {
+                "chat_id": chat_id,
+                "photo": fotos_validas[0],
+                "caption": text,
+            }
+            if reply_markup is not None:
+                photo_payload["reply_markup"] = reply_markup
+            ok_photo, _err_photo = await self._post_telegram("sendPhoto", photo_payload)
+            if ok_photo:
+                return True, None
+
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": False,
+        }
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        return await self._post_telegram("sendMessage", payload)
+
+    async def answer_callback_query(
+        self,
+        callback_query_id: str,
+        text: str = "",
+    ) -> tuple[bool, str | None]:
+        if not self._bot_token or not callback_query_id:
+            return False, "callback_invalid"
+        return await self._post_telegram(
+            "answerCallbackQuery",
+            {"callback_query_id": callback_query_id, "text": text[:180]},
+        )
 
 
 def construir_ficha_url(state: dict[str, Any], *, base_url: str) -> str:
@@ -144,7 +225,7 @@ def generar_clave_dedupe_alerta(state: dict[str, Any]) -> str:
 
 
 def formatear_alerta_oportunidad(state: dict[str, Any], *, ficha_url: str) -> str:
-    """Plantilla estructurada de alerta de oportunidad con enlace a ficha y aviso legal."""
+    """Plantilla estructurada de alerta con publicación, 1–2 fotos, contacto y aviso legal."""
     ubicacion = state.get("ubicacion", "Ubicación no especificada")
     condado = state.get("condado", "N/A")
     precio = float(state.get("precio_usd") or 0.0)
@@ -163,14 +244,50 @@ def formatear_alerta_oportunidad(state: dict[str, Any], *, ficha_url: str) -> st
         else "Sin señales de riesgo en texto"
     )
 
-    return (
-        "OPORTUNIDAD OPENCLAW DETECTADA\n"
-        f"Propiedad: {ubicacion} ({condado})\n"
-        f"Precio: ${precio:,.0f} | NOI: ${noi:,.0f} | Cap Rate: {float(cap_rate):.2f}%\n"
-        f"CAPEX visual: {vision_txt}\n"
-        f"Auditoría legal: {legal_txt}\n"
-        f"Ficha: {ficha_url}"
-    )
+    lineas = [
+        "OPORTUNIDAD OPENCLAW DETECTADA",
+        f"Propiedad: {ubicacion} ({condado})",
+        f"Precio: ${precio:,.0f} | NOI: ${noi:,.0f} | Cap Rate: {float(cap_rate):.2f}%",
+        f"CAPEX visual: {vision_txt}",
+        f"Auditoría legal: {legal_txt}",
+    ]
+
+    url_origen = str(state.get("url_origen") or "").strip()
+    if url_origen.startswith(("https://", "http://")):
+        lineas.append(f"Publicación: {url_origen}")
+
+    contacto = extraer_contacto_vendedor(str(state.get("descripcion_cruda") or ""))
+    if contacto:
+        lineas.append(f"Vendedor/Agente: {contacto}")
+
+    fotos = [
+        str(u).strip()
+        for u in (state.get("imagenes") or [])
+        if str(u).strip().startswith(("https://", "http://"))
+    ][:2]
+    for idx, foto in enumerate(fotos, start=1):
+        lineas.append(f"Foto {idx}: {foto}")
+
+    lineas.append(f"Ficha: {ficha_url}")
+    return "\n".join(lineas)
+
+
+async def _despachar_notificacion(
+    notifier: NotifierPort,
+    *,
+    chat_id: str,
+    text: str,
+    reply_markup: dict[str, Any] | None,
+    photo_urls: list[str],
+) -> tuple[bool, str | None]:
+    """Invoca ``notifier.send_message`` preservando compatibilidad con dobles simples de prueba."""
+    sig = inspect.signature(notifier.send_message)
+    kwargs: dict[str, Any] = {}
+    if "reply_markup" in sig.parameters:
+        kwargs["reply_markup"] = reply_markup
+    if "photo_urls" in sig.parameters:
+        kwargs["photo_urls"] = photo_urls
+    return await notifier.send_message(chat_id, text, **kwargs)
 
 
 async def nodo_alerta_telegram(
@@ -181,7 +298,7 @@ async def nodo_alerta_telegram(
     alert_config: AlertConfig | None = None,
     chat_id: str | None = None,
 ) -> dict[str, Any]:
-    """Envía una única alerta deduplicada para oportunidades elegibles con enlace a su ficha."""
+    """Envía una única alerta deduplicada para oportunidades elegibles con botones y publicación."""
     cfg = alert_config if alert_config is not None else AlertConfig()
     ficha_url = construir_ficha_url(state, base_url=cfg.ficha_base_url)
     dedupe_key = generar_clave_dedupe_alerta(state)
@@ -214,10 +331,23 @@ async def nodo_alerta_telegram(
         }
 
     mensaje = formatear_alerta_oportunidad(state, ficha_url=ficha_url)
+    botones = construir_botones_oportunidad(state)
+    fotos = [
+        str(u).strip()
+        for u in (state.get("imagenes") or [])
+        if str(u).strip().startswith(("https://", "http://"))
+    ][:2]
+
     target_chat = chat_id if chat_id is not None else str(getattr(settings, "TG_CHAT_ID", "") or "")
     active_notifier = notifier if notifier is not None else TelegramNotifierAdapter()
 
-    ok, err = await active_notifier.send_message(target_chat, mensaje)
+    ok, err = await _despachar_notificacion(
+        active_notifier,
+        chat_id=target_chat,
+        text=mensaje,
+        reply_markup=botones,
+        photo_urls=fotos,
+    )
     status_str = "ALERTA_ENVIADA" if ok else "ALERTA_ERROR"
     result = AlertDispatchResult(
         sent=ok,

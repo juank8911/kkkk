@@ -43,6 +43,13 @@ _IGNORED_IMAGE_PATTERNS: Final[tuple[str, ...]] = (
     "logo.",
     "icon",
     ".svg",
+    "badge",
+    "equal-housing",
+    "/flags/",
+    "maps.gstatic",
+    "app-download",
+    "google-play",
+    "apple-app",
 )
 
 # Etiquetas explícitas
@@ -435,9 +442,14 @@ def _extract_city(block: str, ubicacion: str | None) -> str | None:
 def _extract_source_id(block: str, *, platform: str, fallback_url: str | None) -> str | None:
     label_match = _LABEL_URL_RE.search(block)
     if label_match:
-        raw_val = _clean_md_value(label_match.group(1))
-        link_match = _MARKDOWN_LINK_RE.search(label_match.group(1))
-        candidate = link_match.group(1).strip() if link_match else raw_val
+        raw_line = label_match.group(1).strip()
+        link_match = _MARKDOWN_LINK_RE.search(raw_line)
+        if link_match:
+            candidate = link_match.group(1).strip()
+        elif raw_line.startswith(("http://", "https://")):
+            candidate = raw_line.strip("<>()[]|`* ")
+        else:
+            candidate = _clean_md_value(raw_line)
         if not _is_placeholder(candidate) and len(candidate) >= 3:
             if candidate.startswith(("http://", "https://")) or ":" in candidate:
                 return candidate
@@ -474,7 +486,7 @@ def _extract_images(block: str) -> list[str]:
             seen.add(url)
             urls.append(url)
 
-    return urls
+    return urls[:2]
 
 
 def _extract_coordinates(block: str) -> tuple[float | None, float | None]:
