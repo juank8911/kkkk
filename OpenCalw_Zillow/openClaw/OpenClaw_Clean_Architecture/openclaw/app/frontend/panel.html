@@ -98,10 +98,9 @@
   <header>
     <div>
       <h1>OpenClaw — Panel de Jobs y Telemetría (S5-04)</h1>
-      <small id="ws-status" style="color: var(--muted);">Telemetría WS: desconectado</small>
+      <small id="ws-status" style="color: var(--muted);">Clave táctica gestionada por el servidor</small>
     </div>
     <div class="controls">
-      <input id="api-key-input" type="password" placeholder="X-OpenClaw-Tactical-Key" />
       <input id="query-input" type="text" placeholder="Ej: Cleveland, OH" value="Cleveland, OH" />
       <button id="btn-create-job" type="button">Iniciar barrido</button>
       <button id="btn-connect-ws" type="button">Conectar WS</button>
@@ -142,13 +141,6 @@
     let wsConnection = null;
     const MAX_EVENTS = 100;
 
-    function getHeaders() {
-      const headers = { "Content-Type": "application/json" };
-      const key = document.getElementById("api-key-input").value.trim();
-      if (key) headers["X-OpenClaw-Tactical-Key"] = key;
-      return headers;
-    }
-
     function renderJobsTable() {
       const tbody = document.getElementById("jobs-tbody");
       tbody.replaceChildren();
@@ -181,9 +173,7 @@
       const detailEl = document.getElementById("job-detail");
       if (!jobId) return;
       try {
-        const resp = await fetch(`/v1/openclaw/barridos/${encodeURIComponent(jobId)}`, {
-          headers: getHeaders(),
-        });
+        const resp = await fetch(`/panel/api/barridos/${encodeURIComponent(jobId)}`);
         const data = await resp.json();
         if (resp.ok && data.job_id) {
           jobsMap.set(data.job_id, data);
@@ -197,9 +187,9 @@
 
     async function createSweepJob() {
       const query = document.getElementById("query-input").value.trim();
-      const resp = await fetch("/v1/openclaw/barridos", {
+      const resp = await fetch("/panel/api/barridos", {
         method: "POST",
-        headers: getHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, plataformas: ["zillow", "realtor", "redfin"] }),
       });
       const data = await resp.json();
@@ -226,9 +216,7 @@
       const statusEl = document.getElementById("ws-status");
       if (wsConnection) wsConnection.close();
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const key = document.getElementById("api-key-input").value.trim();
-      const qs = key ? `?api_key=${encodeURIComponent(key)}` : "";
-      wsConnection = new WebSocket(`${proto}//${window.location.host}/v1/openclaw/ws/scraping-feed${qs}`);
+      wsConnection = new WebSocket(`${proto}//${window.location.host}/v1/openclaw/ws/scraping-feed`);
       wsConnection.onopen = () => {
         statusEl.textContent = "Telemetría WS: conectado";
         appendTelemetry("Conectado al feed de telemetría.");
