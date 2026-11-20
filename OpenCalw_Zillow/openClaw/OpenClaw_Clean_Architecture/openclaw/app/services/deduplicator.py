@@ -43,7 +43,9 @@ _STREET_ABBREVS: Final[dict[str, str]] = {
     "southwest": "sw",
     "apartment": "apt",
     "suite": "ste",
-    "unit": "unit",
+    "unit": "apt",
+    "calle": "st",
+    "avenida": "ave",
 }
 
 _PUNCT_RE: Final[re.Pattern[str]] = re.compile(r"[^\w\s]")
@@ -200,3 +202,16 @@ def deduplicar_propiedades(
             )
 
     return consolidadas
+
+
+def buscar_duplicado_existente(
+    candidata: DatosPropiedadNormalizados,
+    existentes: Sequence[DatosPropiedadNormalizados],
+    *,
+    umbral_similitud: float = 0.88,
+) -> DatosPropiedadNormalizados | None:
+    """Devuelve la propiedad existente equivalente si `candidata` ya fue registrada."""
+    for item in existentes:
+        if son_misma_propiedad(item, candidata, umbral_similitud=umbral_similitud):
+            return item
+    return None
