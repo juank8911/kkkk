@@ -147,6 +147,7 @@
       for (const job of jobsMap.values()) {
         const tr = document.createElement("tr");
         tr.className = "job-row";
+        tr.title = "Haz clic para ver el detalle del job";
         tr.addEventListener("click", () => loadJobDetail(job.job_id));
 
         const tdId = document.createElement("td");
@@ -171,12 +172,20 @@
 
     async function loadJobDetail(jobId) {
       const detailEl = document.getElementById("job-detail");
-      if (!jobId) return;
+      if (!jobId) {
+        detailEl.textContent = "Escribe un job_id o crea un barrido para consultar su detalle.";
+        return;
+      }
       try {
         const resp = await fetch(`/panel/api/barridos/${encodeURIComponent(jobId)}`);
-        const data = await resp.json();
+        const data = await resp.json().catch(() => ({ detail: "Respuesta no válida del servidor" }));
+        if (!resp.ok) {
+          detailEl.textContent = `Error ${resp.status}: ${JSON.stringify(data, null, 2)}`;
+          return;
+        }
         if (resp.ok && data.job_id) {
           jobsMap.set(data.job_id, data);
+          document.getElementById("lookup-job-id").value = data.job_id;
           renderJobsTable();
         }
         detailEl.textContent = JSON.stringify(data, null, 2);
@@ -195,6 +204,7 @@
       const data = await resp.json();
       if (resp.ok && data.job_id) {
         jobsMap.set(data.job_id, data);
+        document.getElementById("lookup-job-id").value = data.job_id;
         renderJobsTable();
         document.getElementById("job-detail").textContent = JSON.stringify(data, null, 2);
       } else {
