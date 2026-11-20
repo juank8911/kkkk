@@ -1,34 +1,124 @@
-"""Webhook de comandos de Telegram.
+"""Webhook de comandos de Telegram (S2-05).
 
-Salvaguarda del sprint 0: mientras ``BUY_MODE`` no sea ``sandbox``, el comando
-``/buy`` se rechaza y no se llama al servicio de liquidez. La implementacion
-completa (orden parametrizada, idempotencia y auditoria) es la tarea S2-07.
+Tres capas antes de ejecutar nada:
+
+1. Autenticacion: ``secret_token`` de Telegram o la API key tactica.
+2. Allowlist de chats (``TG_ALLOWED_CHAT_IDS``); vacia significa sin restriccion.
+3. Deduplicacion de ``update_id`` en Redis: un update repetido no se procesa dos
+   veces. Si Redis no responde se rechaza la peticion (fail-closed), porque el
+   coste de un ``/buy`` duplicado es mayor que el de un reintento.
+
+La salvaguarda de ``BUY_MODE`` sigue vigente: mientras no sea ``sandbox``, el
+comando ``/buy`` se rechaza y no se llama al servicio de liquidez.
 """
 
 from __future__ import annotations
 
+import hmac
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from app.core.config import settings
-from app.core.security import requiere_api_key
+from app.core.redis_client import redis_client
+from app.core.security import CABECERA_API_KEY, hash_api_key
 
 logger = logging.getLogger("OpenClaw.Comandos")
 
-router = APIRouter(
-    prefix="/v1/webhook",
-    tags=["comandos"],
-    dependencies=[Depends(requiere_api_key)],
+router = APIRouter(prefix="/v1/webhook", tags=["comandos"])
+
+CABECERA_SECRETO = "X-Telegram-Bot-Api-Secret-Token"
+PREFIJO_DEDUPE = "openclaw:tg:update:"
+
+
+def _clave_tactica_valida(valor: str | None) -> bool:
+    esperada = settings.api_key_hash
+    if not esperada or not valor:
+        return False
+    return hmac.compare_digest(hash_api_key(valor), esperada)
+
+
+async def autorizar_webhook(
+    x_telegram_bot_api_secret_token: Annotated[
+        str | None, Header(alias=CABECERA_SECRETO)
+    ] = None,
+    x_openclaw_tactical_key: Annotated[str | None, Header(alias=CABECERA_API_KEY)] = None,
+) -> str:
+    """Acepta el ``secret_token`` de Telegram o, en su defecto, la API key tactica."""
+    esperado = settings.TG_WEBHOOK_SECRET.strip()
+
+    if esperado and x_telegram_bot_api_secret_token:
+        if hmac.compare_digest(x_telegram_bot_api_secret_token, esperado):
+            return "telegram"
+        logger.warning("webhook_secreto_invalido")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El secret_token del webhook no es valido",
+        )
+
+    if _clave_tactica_valida(x_openclaw_tactical_key):
+        return "api_key"
+
+    if not esperado:
+        if settings.APP_ENV == "prod":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="El webhook no tiene secret_token configurado",
+            )
+        return "sin_secreto_dev"
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Credenciales del webhook invalidas",
+    )
+
+
+async def _update_es_nuevo(update_id: int) -> bool:
+    """Marca el update como visto; False si ya se proceso antes."""
+    clave = f"{PREFIJO_DEDUPE}{update_id}"
+    try:
+        creado = await redis_client.set(
+            clave, "1", nx=True, ex=settings.TG_DEDUPE_TTL_SEGUNDOS
+        )
+    except Exception as exc:  # noqa: BLE001 - cualquier fallo de Redis se informa igual
+        logger.error("dedupe_no_disponible", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se puede verificar la idempotencia del update",
+        ) from exc
+    return bool(creado)
+
+
+@router.post(
+    "/telegram-comando",
+    summary="Procesa un comando de Telegram",
+    responses={
+        403: {"description": "Chat no autorizado o credenciales invalidas"},
+        503: {"description": "Deduplicacion no disponible"},
+    },
 )
+async def procesar_comando_telegram(
+    update: dict[str, Any],
+    identidad: Annotated[str, Depends(autorizar_webhook)],
+) -> dict[str, str]:
+    update_id = update.get("update_id")
+    if isinstance(update_id, int) and not await _update_es_nuevo(update_id):
+        logger.info("update_duplicado", extra={"update_id": update_id, "via": identidad})
+        return {"status": "Update duplicado ignorado"}
 
+    mensaje = update.get("message") or {}
+    chat_id = (mensaje.get("chat") or {}).get("id")
+    autorizados = settings.chats_autorizados
+    if autorizados and chat_id not in autorizados:
+        logger.warning("chat_no_autorizado", extra={"chat_id": str(chat_id)})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chat no autorizado para comandos",
+        )
 
-@router.post("/telegram-comando", summary="Procesa un comando de Telegram")
-async def procesar_comando_telegram(update: dict[str, Any]) -> dict[str, str]:
-    texto = str(update.get("message", {}).get("text", "")).strip()
-
+    texto = str(mensaje.get("text", "")).strip()
     if not texto.startswith("/buy"):
         return {"status": "Comando ignorado"}
 

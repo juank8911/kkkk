@@ -18,9 +18,14 @@ import pytest
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import ValidationError
 
+from app.api.main import app as openclaw_app
+from app.api.routes import ingestion as ingestion_route
+from app.core.config import settings
+from app.core.security import CABECERA_API_KEY, hash_api_key
 from app.integrations.uao_client import UaoClient
 from app.models.buy import BuyMode, BuyOrderRequest, BuyOrderStatus
 from app.models.contracts import BarridoRequest
+from app.services import job_store as job_store_module
 from app.services.buy_service import (
     BuyConfirmationError,
     BuyDisabledError,
@@ -272,3 +277,59 @@ async def test_security_buy_tampered_confirmation_and_replay_protection() -> Non
             idempotency_key="short",
             requested_by="chat-777001",
         )
+
+
+async def test_security_real_openclaw_app_sha256_auth_ssrf_and_buy_guard(
+    fake_redis: fakeredis.aioredis.FakeRedis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verifica integración S2-09 contra la app FastAPI real y S2-01 (`app.core.security`)."""
+    secret = "tactical-prod-key-sha256-test"
+    monkeypatch.setattr(ingestion_route, "redis_client", fake_redis)
+    monkeypatch.setattr(job_store_module, "redis_client", fake_redis)
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    monkeypatch.setattr(settings, "OPENCLAW_API_KEY", "")
+    monkeypatch.setattr(settings, "OPENCLAW_API_KEY_SHA256", hash_api_key(secret))
+    monkeypatch.setattr(settings, "BUY_MODE", "disabled")
+
+    transport = httpx.ASGITransport(app=openclaw_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # 1. Sin cabecera -> 401 con WWW-Authenticate
+        r_401 = await client.post(
+            "/v1/openclaw/barridos",
+            json={"query": "Miami, FL", "plataformas": ["zillow"]},
+        )
+        assert r_401.status_code == 401
+        assert r_401.headers.get("www-authenticate") == CABECERA_API_KEY
+
+        # 2. Clave inválida -> 403
+        r_403 = await client.post(
+            "/v1/openclaw/barridos",
+            json={"query": "Miami, FL", "plataformas": ["zillow"]},
+            headers={CABECERA_API_KEY: "clave-incorrecta"},
+        )
+        assert r_403.status_code == 403
+
+        # 3. Clave válida + intento SSRF -> 422 con catálogo cerrado
+        r_ssrf = await client.post(
+            "/v1/openclaw/barridos",
+            json={"query": "Miami, FL", "plataformas": ["http://169.254.169.254"]},
+            headers={CABECERA_API_KEY: secret},
+        )
+        assert r_ssrf.status_code == 422
+
+        # 4. Clave válida + payload válido -> 202
+        r_202 = await client.post(
+            "/v1/openclaw/barridos",
+            json={"query": "Miami, FL", "plataformas": ["zillow"]},
+            headers={CABECERA_API_KEY: secret},
+        )
+        assert r_202.status_code == 202
+
+        # 5. /buy con BUY_MODE=disabled -> 403
+        r_buy = await client.post(
+            "/v1/webhook/telegram-comando",
+            json={"message": {"text": "/buy"}},
+            headers={CABECERA_API_KEY: secret},
+        )
+        assert r_buy.status_code == 403
