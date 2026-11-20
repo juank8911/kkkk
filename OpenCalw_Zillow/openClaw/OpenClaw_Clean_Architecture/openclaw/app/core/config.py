@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "https://resuciter.jeikeisolutions.com/ollama"
     OLLAMA_API_KEY: str = ""
     OLLAMA_MODEL: str = "qwen2.5:3b"
-    OLLAMA_TIMEOUT_SEGUNDOS: int = Field(default=90, ge=10, le=300)
+    OLLAMA_TIMEOUT_SEGUNDOS: int = Field(default=300, ge=10, le=300)
     OLLAMA_MAX_MARKDOWN_CHARS: int = Field(default=50000, ge=5000, le=200000)
     REDIS_STREAM_DLQ_DECISIONES: str = "openclaw_decisiones_dlq"
     DECISION_MAX_INTENTOS_NODO: int = Field(default=2, ge=1, le=5)
