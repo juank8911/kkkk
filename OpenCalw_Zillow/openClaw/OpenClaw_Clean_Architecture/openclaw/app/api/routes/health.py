@@ -32,11 +32,13 @@ async def health() -> dict[str, str]:
 @router.get("/readyz", summary="Readiness de las dependencias")
 async def readyz(response: Response) -> dict[str, Any]:
     checks: dict[str, str] = {}
+    redis_ok = True
 
     try:
         await redis_client.ping()
         checks["redis"] = "ok"
     except Exception as exc:  # noqa: BLE001 - cualquier fallo degrada el servicio
+        redis_ok = False
         checks["redis"] = f"error:{type(exc).__name__}"
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         logger.warning("redis_no_disponible", extra={"error": str(exc)})
@@ -45,6 +47,6 @@ async def readyz(response: Response) -> dict[str, Any]:
     checks["configuracion"] = "ok" if not faltantes else f"faltan:{','.join(faltantes)}"
 
     return {
-        "status": "ok" if response.status_code == status.HTTP_200_OK else "degradado",
+        "status": "ok" if redis_ok else "degradado",
         "checks": checks,
     }
