@@ -1,0 +1,12 @@
+# Entorno de trabajo y artefactos
+.work/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+node_modules/
+*.bundle
+
+# Entregables generados grandes
+*.pptx
