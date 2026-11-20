@@ -183,9 +183,52 @@ análisis estático y el CI queda como puerta de calidad.
 | Rama `dev1` | `7f3de30` más el commit de S3-04/S3-06 |
 | `pytest` y `alembic` | No ejecutables en este equipo (intérprete de Python bloqueado) |
 
+## Sprint 4 (Dev 1)
+
+### S4-01 · Grafo tipado con aristas condicionales y checkpointer
+- `app/orchestrator/graph.py` compila un `StateGraph` real sobre `EstadoGrafo`
+  (hereda el estado de los nodos y añade `ruta`, `nodo_fallido`, `motivo_fallo`).
+- Recorrido: `clasificar → financiero → vision → legal → alerta`, con dos salidas
+  tempranas: precio fuera de rango termina en `DESCARTADO_PRECIO` sin llamar al
+  proveedor, y un nodo agotado termina el grafo en `FALLO_NODO`.
+- El checkpointer es `MemorySaver` por defecto e inyectable; `thread_id` =
+  `propiedad:<uuid>` para poder reanudar una evaluación.
+- Si `langgraph` no está instalado, `evaluar_propiedad()` cae al pipeline
+  secuencial de `workflow.py` en lugar de romper el worker.
+
+### S4-02 · Cada propiedad evaluada deja una fila en `decisiones`
+- `app/orchestrator/decisiones.py` traduce el estado final a `Decision`:
+  veredicto (`comprar`, `revisar`, `descartar`, `error`), cap rate normalizado a
+  fracción para `Numeric(6,4)`, CAPEX, motivo y un `detalle` con visión, legal,
+  alerta y ficha.
+- `estado_inicial_desde_orm()` adapta la fila de `propiedades` al estado del
+  grafo, así el worker no tiene que construir el diccionario a mano.
+- `evaluar_y_registrar_decision()` guarda la decisión y el evento
+  `decision.registrada` en la misma transacción por propiedad.
+
+### S4-03 · Reintento por nodo y dead-letter de decisiones
+- `con_reintentos(nombre, nodo, intentos)` reintenta el nodo
+  (`DECISION_MAX_INTENTOS_NODO`, 2 por defecto) y, al agotarlos, escribe en
+  `openclaw_decisiones_dlq` el nodo, el motivo, el número de intentos, la
+  propiedad y el job.
+- La DLQ es best-effort: si Redis no responde se registra el error pero el grafo
+  termina igual con veredicto `error`, que exige revisión humana.
+
+### Pruebas nuevas
+| Archivo | Cobertura |
+|---|---|
+| `tests/test_decisiones_orquestador.py` | veredictos, normalización del cap rate, mapeo a `Decision`, reintentos con éxito y con DLQ, Redis caído y aristas condicionales |
+
+## Verificación del corte
+| Comprobación | Resultado |
+|---|---|
+| `pyright` (modo basic) sobre `app`, `tests`, `scripts` | 0 errores, 4 avisos (`redis.exceptions` sin resolver) |
+| `dev1` → `main` | Fusión `--no-ff` sin conflictos |
+| `pytest` | No ejecutable en este equipo (intérprete de Python bloqueado) |
+
 ## Siguiente corte
-1. Sprint 4: conectar el worker a la unidad de trabajo para escribir propiedades y
-   eventos en PostgreSQL (hoy el job vive solo en Redis).
-2. Sprint 5: panel de jobs y notificaciones de Telegram sobre los eventos ya
-   persistidos.
-3. Reintentar `git push` cuando haya red o conector de GitHub habilitado.
+1. Sprint 5: panel de jobs con estado por plataforma y notificaciones de Telegram
+   sobre las decisiones persistidas.
+2. Conectar `evaluar_y_registrar_decision()` al worker justo después de
+   `procesar_lote_extraccion_con_uow`, propiedad por propiedad.
+3. Reintentar `git push kkk main:main` cuando haya red.
