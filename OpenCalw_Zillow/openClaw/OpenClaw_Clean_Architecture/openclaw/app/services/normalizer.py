@@ -78,9 +78,7 @@ _US_ADDRESS_RE = re.compile(
     r"[^,\n]{0,25},\s*[A-Za-z .'-]{2,40},\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?)"
 )
 
-_LABEL_COUNTY_RE = re.compile(
-    r"(?im)^[\s\-*>#]*(?:county|condado)\s*:\s*(.+)$"
-)
+_LABEL_COUNTY_RE = re.compile(r"(?im)^[\s\-*>#]*(?:county|condado)\s*:\s*(.+)$")
 _INLINE_COUNTY_RE = re.compile(
     r"(?:\bin\s+|,\s*)([A-Z][A-Za-z\-]+(?:\s+[A-Z][A-Za-z\-]+){0,2})\s+County\b"
     r"(?!\s+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|Way|Pl|Place|Cir|Pkwy|Ter|Hwy|Trl)\b)"
@@ -272,8 +270,7 @@ class MarkdownPropertyNormalizer:
             return propiedad, [], source_id
         except ValidationError as exc:
             pydantic_reasons = [
-                f"validation_error:{'.'.join(str(p) for p in err['loc'])}"
-                for err in exc.errors()
+                f"validation_error:{'.'.join(str(p) for p in err['loc'])}" for err in exc.errors()
             ]
             return None, pydantic_reasons, source_id
 

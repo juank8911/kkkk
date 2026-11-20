@@ -1,0 +1,52 @@
+[
+  {
+    "id": "s2_edge_01_price_drop_and_hoa_noise",
+    "platform": "zillow",
+    "url_origen": "https://www.zillow.com/homedetails/310-walnut-st/310_zpid/",
+    "markdown": "# 310 Walnut St, Cincinnati, OH 45202\n\nHOA Fee: $220/mo\nProperty Tax: $185/mo\n$118,500 | Price cut: $4,500\nLocated in Hamilton County.\nEst. Rent: $1,425/mo\n![Exterior](https://photos.zillowstatic.com/310-ext.jpg)\n![Tracking Pixel](https://photos.zillowstatic.com/pixel.png)\n\n## Description\nBrick duplex unit near downtown Cincinnati with updated roof and copper plumbing.",
+    "expected": {
+      "precio_usd": 118500.0,
+      "condado": "Hamilton",
+      "ingreso_anual_estimado": 17100.0,
+      "min_images": 1
+    }
+  },
+  {
+    "id": "s2_edge_02_annual_rent_on_monthly_label",
+    "platform": "loopnet",
+    "url_origen": "https://www.loopnet.com/Listing/410-market-ave/410/",
+    "markdown": "Address: 410 Market Ave, Canton, OH 44702\nPrice: $149,900\nCounty: Stark County\nRent: $22,800/yr\nCoordinates: 40.7989, -81.3784\n\nDescription:\nMixed-use storefront with two upper residential units fully rented on annual leases.",
+    "expected": {
+      "precio_usd": 149900.0,
+      "condado": "Stark",
+      "ingreso_anual_estimado": 22800.0,
+      "min_images": 0
+    }
+  },
+  {
+    "id": "s2_edge_03_out_of_range_coords_ignored",
+    "platform": "realtor",
+    "url_origen": "https://www.realtor.com/realestateandhomes-detail/510-river-rd_M510",
+    "markdown": "Property Address: 510 River Rd, Dayton, OH 45405\nList Price: $96,000\nCounty: Montgomery\nCoordinates: 95.5000, -210.0000\nMonthly Rent: $1,150/mo\n\nDescription:\nSolid 3-bedroom home in Dayton with detached garage and fenced backyard.",
+    "expected": {
+      "precio_usd": 96000.0,
+      "condado": "Montgomery",
+      "ingreso_anual_estimado": 13800.0,
+      "min_images": 0,
+      "coords_none": true
+    }
+  },
+  {
+    "id": "s2_edge_04_source_id_prefixed_with_platform",
+    "platform": "redfin",
+    "url_origen": null,
+    "markdown": "ID: rf-994201\n# 620 Broad St, Richmond, VA 23219\nPrice: $145,000\nCounty: Henrico County\nAnnual Income: $19,200\n![Front](https://ssl.cdn-redfin.com/620-front.jpg)\n\nOverview:\nRenovated historic townhome with brand-new HVAC and strong corporate tenant demand.",
+    "expected": {
+      "precio_usd": 145000.0,
+      "condado": "Henrico",
+      "ingreso_anual_estimado": 19200.0,
+      "min_images": 1,
+      "source_id": "redfin:rf-994201"
+    }
+  }
+]

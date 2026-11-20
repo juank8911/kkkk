@@ -32,6 +32,9 @@ VALID_FIXTURES: list[dict[str, Any]] = json.loads(
 INCOMPLETE_FIXTURES: list[dict[str, Any]] = json.loads(
     (FIXTURES_DIR / "incomplete_fixtures.json").read_text(encoding="utf-8")
 )
+S2_EDGE_FIXTURES: list[dict[str, Any]] = json.loads(
+    (FIXTURES_DIR / "edge_cases_s2_06.json").read_text(encoding="utf-8")
+)
 
 
 def test_exactly_twenty_valid_fixtures_covering_all_nine_platforms() -> None:
@@ -137,3 +140,55 @@ def test_cassette_markdown_flows_cleanly_into_normalizer() -> None:
     assert prop.ingreso_anual_estimado == 17400.0
     assert prop.latitud == pytest.approx(41.4822)
     assert prop.longitud == pytest.approx(-81.7341)
+
+
+@pytest.mark.parametrize("fixture", S2_EDGE_FIXTURES, ids=lambda f: f["id"])
+def test_s2_06_real_world_edge_case_fixtures(fixture: dict[str, Any]) -> None:
+    """Cierre S2-06: casos borde reales de markdown producen objetos normalizados consistentes."""
+    prop = normalizar_propiedad_unica(
+        fixture["markdown"],
+        plataforma=fixture["platform"],
+        url_origen=fixture["url_origen"],
+    )
+    expected = fixture["expected"]
+    assert prop.precio_usd == pytest.approx(expected["precio_usd"])
+    assert prop.condado == expected["condado"]
+    assert prop.ingreso_anual_estimado == pytest.approx(expected["ingreso_anual_estimado"])
+    assert len(prop.imagenes) >= expected["min_images"]
+    if expected.get("coords_none"):
+        assert prop.latitud is None
+        assert prop.longitud is None
+    if "source_id" in expected:
+        assert prop.id_plataforma_origen == expected["source_id"]
+
+
+def test_negative_price_and_short_description_rejected() -> None:
+    negative_md = (
+        "# 900 Negative Ave, Cleveland, OH 44102\n"
+        "Price: -$50,000\n"
+        "County: Cuyahoga\n"
+        "Description:\nCorrupted negative price listing from feed."
+    )
+    with pytest.raises(NormalizationError) as exc_info:
+        normalizar_propiedad_unica(
+            negative_md,
+            plataforma="zillow",
+            url_origen="https://www.zillow.com/neg",
+        )
+    assert "missing_or_invalid_price" in exc_info.value.reasons
+
+    invalid_lat_md = (
+        "# 901 Bad Lat Ave, Cleveland, OH 44102\n"
+        "Price: $90,000\n"
+        "County: Cuyahoga\n"
+        "Lat: 99.12\n"
+        "Lng: -81.50\n"
+        "Description:\nListing with out of bounds latitude."
+    )
+    prop = normalizar_propiedad_unica(
+        invalid_lat_md,
+        plataforma="zillow",
+        url_origen="https://www.zillow.com/badlat",
+    )
+    assert prop.latitud is None
+    assert prop.longitud is None

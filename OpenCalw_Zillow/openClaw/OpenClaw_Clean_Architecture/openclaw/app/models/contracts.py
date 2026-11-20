@@ -43,8 +43,7 @@ class BarridoRequest(BaseModel):
         min_length=1,
         max_length=len(VALID_PLATFORM_KEYS),
         description=(
-            "Lista de claves del catálogo cerrado de plataformas: "
-            + ", ".join(VALID_PLATFORM_KEYS)
+            "Lista de claves del catálogo cerrado de plataformas: " + ", ".join(VALID_PLATFORM_KEYS)
         ),
         examples=[["zillow", "realtor", "redfin"]],
     )

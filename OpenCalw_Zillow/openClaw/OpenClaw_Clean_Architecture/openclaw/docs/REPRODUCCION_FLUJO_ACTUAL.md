@@ -1,6 +1,6 @@
 # Reproducción del flujo actual — OpenClaw (S0-06)
 
-- **Fecha de ejecución (UTC):** `2026-11-20T08:45:22.999595+00:00`
+- **Fecha de ejecución (UTC):** `2026-11-20T08:54:01.073286+00:00`
 - **Script:** `scripts/reproducir_flujo_actual.py`
 - **Modo:** `reproduccion_aislada_con_fakeredis`
 
@@ -14,7 +14,7 @@ python scripts/reproducir_flujo_actual.py
 
 ```json
 {
-  "timestamp_utc": "2026-11-20T08:45:22.999595+00:00",
+  "timestamp_utc": "2026-11-20T08:54:01.073286+00:00",
   "modo": "reproduccion_aislada_con_fakeredis",
   "pasos": {
     "1_health": {
@@ -31,14 +31,14 @@ python scripts/reproducir_flujo_actual.py
       "endpoint": "POST /v1/openclaw/barridos",
       "status_code": 202,
       "body": {
-        "job_id": "47ae614d-42f5-449e-a983-e2ca28d37d34",
+        "job_id": "fe092703-50e0-483b-a821-ed2441e45ebd",
         "status": "queued",
         "query": "Cleveland, OH",
         "plataformas": [
           "zillow",
           "realtor"
         ],
-        "created_at": "2026-11-20T08:45:23.012384Z",
+        "created_at": "2026-11-20T08:54:01.087295Z",
         "updated_at": null,
         "trace_id": null,
         "progress": {},
@@ -46,17 +46,17 @@ python scripts/reproducir_flujo_actual.py
       }
     },
     "3_consulta_job": {
-      "endpoint": "GET /v1/openclaw/barridos/47ae614d-42f5-449e-a983-e2ca28d37d34",
+      "endpoint": "GET /v1/openclaw/barridos/fe092703-50e0-483b-a821-ed2441e45ebd",
       "status_code": 200,
       "body": {
-        "job_id": "47ae614d-42f5-449e-a983-e2ca28d37d34",
+        "job_id": "fe092703-50e0-483b-a821-ed2441e45ebd",
         "status": "queued",
         "query": "Cleveland, OH",
         "plataformas": [
           "zillow",
           "realtor"
         ],
-        "created_at": "2026-11-20T08:45:23.012384Z",
+        "created_at": "2026-11-20T08:54:01.087295Z",
         "updated_at": null,
         "trace_id": null,
         "progress": {},
@@ -67,14 +67,14 @@ python scripts/reproducir_flujo_actual.py
       "stream": "openclaw_scraping_queue",
       "mensajes_encolados": 1,
       "ultimo_payload": {
-        "job_id": "47ae614d-42f5-449e-a983-e2ca28d37d34",
+        "job_id": "fe092703-50e0-483b-a821-ed2441e45ebd",
         "query": "Cleveland, OH",
         "plataformas": [
           "zillow",
           "realtor"
         ],
         "max_resultados": 20,
-        "encolado_en": "2026-11-20T08:45:23.019339+00:00"
+        "encolado_en": "2026-11-20T08:54:01.088028+00:00"
       }
     },
     "5_plataforma_invalida": {
@@ -91,7 +91,7 @@ python scripts/reproducir_flujo_actual.py
           }
         ],
         "trace_id": null,
-        "timestamp": "2026-11-20T08:45:23.028009Z"
+        "timestamp": "2026-11-20T08:54:01.093587Z"
       }
     },
     "6_webhook_buy_deshabilitado": {
@@ -102,7 +102,7 @@ python scripts/reproducir_flujo_actual.py
         "message": "Compra deshabilitada: BUY_MODE no esta en modo sandbox",
         "details": null,
         "trace_id": null,
-        "timestamp": "2026-11-20T08:45:23.032508Z"
+        "timestamp": "2026-11-20T08:54:01.101225Z"
       }
     },
     "7_orquestador_nodos_aislados": {

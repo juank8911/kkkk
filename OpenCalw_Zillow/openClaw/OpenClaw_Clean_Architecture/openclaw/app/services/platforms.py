@@ -109,8 +109,7 @@ class InvalidPlatformError(ValueError):
         invalid_str = ", ".join(repr(k) for k in self.invalid_keys)
         valid_str = ", ".join(self.valid_keys)
         super().__init__(
-            f"Plataforma(s) no soportada(s): {invalid_str}. "
-            f"Plataformas válidas: [{valid_str}]."
+            f"Plataforma(s) no soportada(s): {invalid_str}. " f"Plataformas válidas: [{valid_str}]."
         )
 
 
@@ -189,9 +188,7 @@ def build_platform_url(platform_key: str, query: str) -> str:
 
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
-    if parsed.scheme != "https" or not (
-        host == spec.domain or host.endswith(f".{spec.domain}")
-    ):
+    if parsed.scheme != "https" or not (host == spec.domain or host.endswith(f".{spec.domain}")):
         raise InvalidQueryError(
             f"La URL generada no corresponde al dominio autorizado '{spec.domain}'."
         )
